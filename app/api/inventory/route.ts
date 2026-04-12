@@ -1,29 +1,44 @@
 import { NextResponse } from "next/server";
-import store, { seedStore, logEvent } from "@/lib/store";
+import { db, seedIfNeeded, logEvent } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  seedStore();
-  return NextResponse.json(Array.from(store.inventory.values()));
+  await seedIfNeeded();
+  return NextResponse.json(await db.getInventory());
 }
 
 export async function POST(req: Request) {
-  seedStore();
+  await seedIfNeeded();
   const { sku, quantity, palletId } = await req.json();
 
   if (!sku || !quantity || !palletId) {
     return NextResponse.json({ error: "sku, quantity, palletId required" }, { status: 400 });
   }
 
-  const existing = store.inventory.get(sku);
-  const newQty = (existing?.quantity ?? 0) + Number(quantity);
   const now = new Date().toISOString();
+  const inventory = await db.getInventory();
+  const existing = inventory.find((i) => i.sku === sku);
+  const newQty = (existing?.quantity ?? 0) + Number(quantity);
 
-  store.inventory.set(sku, { sku, quantity: newQty, lastUpdated: now });
-  store.palletLocations.set(palletId, { palletId, location: "RECEIVING", sku, lastMoved: now });
+  if (existing) {
+    existing.quantity = newQty;
+    existing.lastUpdated = now;
+  } else {
+    inventory.push({ sku, quantity: newQty, lastUpdated: now });
+  }
+  await db.setInventory(inventory);
 
-  logEvent("STOCK_ARRIVAL", { sku, quantity: Number(quantity), palletId, totalNow: newQty });
+  const pallets = await db.getPallets();
+  const pallet = pallets.find((p) => p.palletId === palletId);
+  if (pallet) {
+    pallet.location = "RECEIVING";
+    pallet.lastMoved = now;
+  } else {
+    pallets.push({ palletId, location: "RECEIVING", sku, lastMoved: now });
+  }
+  await db.setPallets(pallets);
 
+  await logEvent("STOCK_ARRIVAL", { sku, quantity: Number(quantity), palletId, totalNow: newQty });
   return NextResponse.json({ status: "confirmed", sku, newQty });
 }

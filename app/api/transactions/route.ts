@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import store, { seedStore } from "@/lib/store";
+import { db, seedIfNeeded } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  seedStore();
+  await seedIfNeeded();
   const { searchParams } = new URL(req.url);
   const limit = Number(searchParams.get("limit") ?? "50");
-  return NextResponse.json(store.transactions.slice(0, limit));
+  const txns = await db.getTransactions();
+  return NextResponse.json(txns.slice(0, limit));
 }

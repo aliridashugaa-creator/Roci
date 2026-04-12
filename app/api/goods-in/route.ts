@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
-import store, { seedStore, logEvent } from "@/lib/store";
+import { db, seedIfNeeded, logEvent } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  seedStore();
-  return NextResponse.json(store.goodsInDocs);
+  await seedIfNeeded();
+  return NextResponse.json(await db.getGoodsInDocs());
 }
 
 export async function POST(req: Request) {
-  seedStore();
+  await seedIfNeeded();
   const { sku, quantity, supplier, palletId } = await req.json();
 
   if (!sku || !quantity || !supplier || !palletId) {
@@ -19,18 +19,13 @@ export async function POST(req: Request) {
     );
   }
 
-  const docId = `GIN-${String(store.goodsInDocs.length + 1).padStart(3, "0")}`;
-  const doc = {
-    docId,
-    sku,
-    quantity: Number(quantity),
-    supplier,
-    palletId,
-    receivedAt: new Date().toISOString(),
-  };
+  const docs = await db.getGoodsInDocs();
+  const docId = `GIN-${String(docs.length + 1).padStart(3, "0")}`;
+  const doc = { docId, sku, quantity: Number(quantity), supplier, palletId, receivedAt: new Date().toISOString() };
 
-  store.goodsInDocs.unshift(doc);
-  logEvent("GOODS_IN_DOC", { docId, sku, quantity: Number(quantity), supplier, palletId });
+  docs.unshift(doc);
+  await db.setGoodsInDocs(docs);
+  await logEvent("GOODS_IN_DOC", { docId, sku, quantity: doc.quantity, supplier, palletId });
 
   return NextResponse.json(doc, { status: 201 });
 }

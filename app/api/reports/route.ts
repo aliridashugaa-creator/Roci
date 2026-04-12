@@ -1,30 +1,26 @@
 import { NextResponse } from "next/server";
-import store, { seedStore } from "@/lib/store";
+import { db, seedIfNeeded } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  seedStore();
+  await seedIfNeeded();
 
-  const inventory = Array.from(store.inventory.values());
+  const [inventory, transfers, discrepancies] = await Promise.all([
+    db.getInventory(),
+    db.getTransfers(),
+    db.getDiscrepancies(),
+  ]);
+
   const totalUnits = inventory.reduce((sum, i) => sum + i.quantity, 0);
-  const activeTransfers = store.transferRequests.filter(
-    (r) => r.status === "pending" || r.status === "in_transit"
-  ).length;
-  const openDiscrepancies = store.discrepancies.filter(
-    (d) => d.status !== "resolved"
-  ).length;
+  const activeTransfers = transfers.filter((r) => ["pending", "in_transit"].includes(r.status)).length;
+  const openDiscrepancies = discrepancies.filter((d) => d.status !== "resolved").length;
 
   return NextResponse.json({
     generatedAt: new Date().toISOString(),
-    summary: {
-      totalSKUs: inventory.length,
-      totalUnits,
-      activeTransfers,
-      openDiscrepancies,
-    },
+    summary: { totalSKUs: inventory.length, totalUnits, activeTransfers, openDiscrepancies },
     inventory,
-    transfers: store.transferRequests,
-    discrepancies: store.discrepancies,
+    transfers,
+    discrepancies,
   });
 }

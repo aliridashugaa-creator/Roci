@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
-import store, { seedStore, logEvent } from "@/lib/store";
+import { db, seedIfNeeded, logEvent } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  seedStore();
-  return NextResponse.json(store.discrepancies);
+  await seedIfNeeded();
+  return NextResponse.json(await db.getDiscrepancies());
 }
 
 export async function POST(req: Request) {
-  seedStore();
+  await seedIfNeeded();
   const { sku, expectedQty, actualQty, location, notes } = await req.json();
 
   if (!sku || expectedQty == null || actualQty == null || !location) {
@@ -19,22 +19,19 @@ export async function POST(req: Request) {
     );
   }
 
-  const now = new Date().toISOString();
+  const items = await db.getDiscrepancies();
   const discrepancy = {
-    id: store.discrepancies.length + 1,
-    sku,
-    expectedQty: Number(expectedQty),
-    actualQty: Number(actualQty),
-    location,
-    status: "open" as const,
+    id: items.length + 1,
+    sku, expectedQty: Number(expectedQty), actualQty: Number(actualQty),
+    location, status: "open" as const,
     notes: notes ?? "",
-    createdAt: now,
+    createdAt: new Date().toISOString(),
   };
 
-  store.discrepancies.unshift(discrepancy);
-  logEvent("DISCREPANCY_REPORTED", {
-    id: discrepancy.id,
-    sku,
+  items.unshift(discrepancy);
+  await db.setDiscrepancies(items);
+  await logEvent("DISCREPANCY_REPORTED", {
+    id: discrepancy.id, sku,
     expectedQty: discrepancy.expectedQty,
     actualQty: discrepancy.actualQty,
     variance: discrepancy.actualQty - discrepancy.expectedQty,
