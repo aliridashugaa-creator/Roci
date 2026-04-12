@@ -8,6 +8,20 @@ const STATUS_FLOW: LoadStatus[] = [
   "booked", "collected", "in_transit", "out_for_delivery", "delivered", "pod_received",
 ];
 
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const [loads, txns] = await Promise.all([db.getLoads(), db.getTransactions()]);
+  const load = loads.find((l) => l.id === Number(id));
+  if (!load) return NextResponse.json({ error: "Load not found" }, { status: 404 });
+  const timeline = txns
+    .filter((t) => t.details?.reference === load.reference || t.details?.original === load.reference || t.details?.new === load.reference)
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  return NextResponse.json({ load, timeline });
+}
+
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }

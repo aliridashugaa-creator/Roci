@@ -31,6 +31,13 @@ interface Load {
   updatedAt: string;
 }
 
+interface TimelineEvent {
+  id: number;
+  timestamp: string;
+  event: string;
+  details: Record<string, unknown>;
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 const STATUS_FLOW: LoadStatus[] = ["booked", "collected", "in_transit", "out_for_delivery", "delivered", "pod_received"];
@@ -72,7 +79,12 @@ function nextStatus(s: LoadStatus): LoadStatus | null {
 }
 
 function fmt(iso: string) {
+  if (!iso) return "—";
   return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+function fmtTs(iso: string) {
+  return new Date(iso).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" });
 }
 
 // ── blank booking form ────────────────────────────────────────────────────────
@@ -83,9 +95,15 @@ export default function LoadsPage() {
   const [loads, setLoads] = useState<Load[]>([]);
   const [activeTab, setActiveTab] = useState<"all" | "active" | "failed" | "sub">("all");
   const [showBooking, setShowBooking] = useState(false);
+  const [bookingTab, setBookingTab] = useState<"manual" | "paste">("manual");
   const [form, setForm] = useState(BLANK);
   const [saving, setSaving] = useState(false);
   const [flash, setFlash] = useState("");
+
+  // AI paste state
+  const [pasteText, setPasteText] = useState("");
+  const [extracting, setExtracting] = useState(false);
+  const [extracted, setExtracted] = useState(false);
 
   // per-row panel state
   const [etaRow, setEtaRow] = useState<number | null>(null);
@@ -97,13 +115,52 @@ export default function LoadsPage() {
   const [rbNotes, setRbNotes] = useState("");
   const [working, setWorking] = useState<number | null>(null);
 
-  const load = useCallback(() =>
+  // audit trail
+  const [timelineRow, setTimelineRow] = useState<number | null>(null);
+  const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+
+  const loadData = useCallback(() =>
     fetch(`/api/loads${activeTab !== "all" ? `?filter=${activeTab}` : ""}`)
       .then((r) => r.json()).then(setLoads), [activeTab]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadData(); }, [loadData]);
 
   const showFlash = (msg: string) => { setFlash(msg); setTimeout(() => setFlash(""), 4000); };
+
+  // ── AI extraction ────────────────────────────────────────────────────────
+  const handleExtract = async () => {
+    if (!pasteText.trim()) return;
+    setExtracting(true);
+    try {
+      const res = await fetch("/api/loads/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: pasteText }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showFlash(`Extraction error: ${data.error}`);
+      } else {
+        setForm((f) => ({
+          ...f,
+          customer: data.customer || f.customer,
+          origin: data.origin || f.origin,
+          destination: data.destination || f.destination,
+          collectionDate: data.collectionDate || f.collectionDate,
+          eta: data.eta || f.eta,
+          subcontractor: data.subcontractor || f.subcontractor,
+          subcontractorRef: data.subcontractorRef || f.subcontractorRef,
+          notes: data.notes || f.notes,
+        }));
+        setExtracted(true);
+        setBookingTab("manual");
+        showFlash("Fields extracted — review and confirm.");
+      }
+    } finally {
+      setExtracting(false);
+    }
+  };
 
   // ── book new load ────────────────────────────────────────────────────────
   const handleBook = async (e: React.FormEvent) => {
@@ -118,8 +175,10 @@ export default function LoadsPage() {
     if (res.ok) {
       showFlash(`${data.reference} booked for ${data.customer}`);
       setForm(BLANK);
+      setPasteText("");
+      setExtracted(false);
       setShowBooking(false);
-      load();
+      loadData();
     } else {
       showFlash(`Error: ${data.error}`);
     }
@@ -136,7 +195,7 @@ export default function LoadsPage() {
     });
     const data = await res.json();
     if (!res.ok) showFlash(`Error: ${data.error}`);
-    await load();
+    await loadData();
     setWorking(null);
     return data;
   };
@@ -162,14 +221,24 @@ export default function LoadsPage() {
     setRebookRow(null); setRbDate(""); setRbEta(""); setRbNotes("");
   };
 
+  // ── audit trail ──────────────────────────────────────────────────────────
+  const toggleTimeline = async (l: Load) => {
+    if (timelineRow === l.id) { setTimelineRow(null); return; }
+    setTimelineRow(l.id);
+    setTimelineLoading(true);
+    const res = await fetch(`/api/loads/${l.id}`);
+    const data = await res.json();
+    setTimeline(data.timeline ?? []);
+    setTimelineLoading(false);
+  };
+
   // ── stats ────────────────────────────────────────────────────────────────
-  const allLoads = loads; // filtered server-side per tab already — for stats use full list on "all" tab
   const stats = {
-    total: allLoads.length,
-    active: allLoads.filter((l) => ["booked", "collected", "in_transit", "out_for_delivery"].includes(l.status)).length,
-    podPending: allLoads.filter((l) => l.status === "delivered" && l.podStatus !== "received").length,
-    failed: allLoads.filter((l) => l.status === "failed").length,
-    subPending: allLoads.filter((l) => l.subcontractor && !l.subcontractorReconciled && ["delivered", "pod_received"].includes(l.status)).length,
+    total: loads.length,
+    active: loads.filter((l) => ["booked", "collected", "in_transit", "out_for_delivery"].includes(l.status)).length,
+    podPending: loads.filter((l) => l.status === "delivered" && l.podStatus !== "received").length,
+    failed: loads.filter((l) => l.status === "failed").length,
+    subPending: loads.filter((l) => l.subcontractor && !l.subcontractorReconciled && ["delivered", "pod_received"].includes(l.status)).length,
   };
 
   const tabs: { key: typeof activeTab; label: string; count?: number }[] = [
@@ -184,11 +253,11 @@ export default function LoadsPage() {
       {/* header */}
       <div className="mb-6 flex items-start justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">Load Admin</h2>
+          <h2 className="text-2xl font-bold text-slate-800">Load Management</h2>
           <p className="text-slate-500 text-sm mt-1">Bookings, status tracking, POD chasing and subcontractor reconciliation</p>
         </div>
         <button
-          onClick={() => setShowBooking(!showBooking)}
+          onClick={() => { setShowBooking(!showBooking); setExtracted(false); setPasteText(""); }}
           className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
         >
           {showBooking ? "✕ Close" : "+ New Booking"}
@@ -221,71 +290,112 @@ export default function LoadsPage() {
       {/* new booking slide-down */}
       {showBooking && (
         <div className="bg-white rounded-xl shadow-sm border border-blue-100 p-6 mb-6">
-          <h3 className="font-semibold text-slate-700 mb-4">Enter New Booking</h3>
-          <form onSubmit={handleBook}>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-              <div>
-                <label className="label">Source</label>
-                <select value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value as LoadSource })}
-                  className="input">
-                  <option value="email">Email</option>
-                  <option value="whatsapp">WhatsApp</option>
-                  <option value="phone">Phone</option>
-                  <option value="manual">Manual</option>
-                </select>
-              </div>
-              <div>
-                <label className="label">Reference (optional)</label>
-                <input value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value.toUpperCase() })}
-                  placeholder="Auto-assigned" className="input" />
-              </div>
-              <div className="col-span-2">
-                <label className="label">Customer</label>
-                <input value={form.customer} onChange={(e) => setForm({ ...form, customer: e.target.value })}
-                  placeholder="Customer name" required className="input" />
-              </div>
-              <div>
-                <label className="label">Origin</label>
-                <input value={form.origin} onChange={(e) => setForm({ ...form, origin: e.target.value })}
-                  placeholder="Collection address / DC" required className="input" />
-              </div>
-              <div>
-                <label className="label">Destination</label>
-                <input value={form.destination} onChange={(e) => setForm({ ...form, destination: e.target.value })}
-                  placeholder="Delivery address" required className="input" />
-              </div>
-              <div>
-                <label className="label">Collection Date</label>
-                <input type="datetime-local" value={form.collectionDate} onChange={(e) => setForm({ ...form, collectionDate: e.target.value })}
-                  required className="input" />
-              </div>
-              <div>
-                <label className="label">ETA</label>
-                <input type="datetime-local" value={form.eta} onChange={(e) => setForm({ ...form, eta: e.target.value })}
-                  required className="input" />
-              </div>
-              <div>
-                <label className="label">Subcontractor</label>
-                <input value={form.subcontractor} onChange={(e) => setForm({ ...form, subcontractor: e.target.value })}
-                  placeholder="Carrier name (optional)" className="input" />
-              </div>
-              <div>
-                <label className="label">Sub Reference</label>
-                <input value={form.subcontractorRef} onChange={(e) => setForm({ ...form, subcontractorRef: e.target.value.toUpperCase() })}
-                  placeholder="Sub's job ref (optional)" className="input" />
-              </div>
-              <div className="col-span-2 lg:col-span-4">
-                <label className="label">Notes</label>
-                <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  placeholder="Any booking notes from email / WhatsApp…" rows={2}
-                  className="input resize-none" />
-              </div>
-            </div>
-            <button type="submit" disabled={saving}
-              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold rounded-lg px-6 py-2 text-sm transition-colors">
-              {saving ? "Booking…" : "Confirm Booking"}
+          {/* booking tabs */}
+          <div className="flex gap-1 mb-5 border-b border-slate-100 pb-4">
+            <button
+              onClick={() => setBookingTab("manual")}
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${bookingTab === "manual" ? "bg-slate-800 text-white" : "text-slate-500 hover:bg-slate-100"}`}
+            >
+              Manual Entry
             </button>
-          </form>
+            <button
+              onClick={() => setBookingTab("paste")}
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${bookingTab === "paste" ? "bg-slate-800 text-white" : "text-slate-500 hover:bg-slate-100"}`}
+            >
+              Paste Message
+              <span className="text-xs font-normal opacity-70">AI</span>
+            </button>
+            {extracted && (
+              <span className="ml-auto text-xs font-medium text-green-600 bg-green-50 px-3 py-1.5 rounded-lg">
+                ✓ Fields extracted
+              </span>
+            )}
+          </div>
+
+          {bookingTab === "paste" ? (
+            <div>
+              <label className="label">Paste email, WhatsApp or any booking message</label>
+              <textarea
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                placeholder={"e.g.\nHi, please book collection from ABC Depot, Manchester tomorrow morning to XYZ Ltd in Birmingham. Customer is Acme Corp. Sub is FastFreight (ref FF-4421). ETA next day by noon."}
+                rows={7}
+                className="input resize-none font-mono text-xs mb-4"
+              />
+              <button
+                onClick={handleExtract}
+                disabled={extracting || !pasteText.trim()}
+                className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-lg px-6 py-2 text-sm transition-colors"
+              >
+                {extracting ? "Extracting…" : "Extract with AI →"}
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleBook}>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                <div>
+                  <label className="label">Source</label>
+                  <select value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value as LoadSource })}
+                    className="input">
+                    <option value="email">Email</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="phone">Phone</option>
+                    <option value="manual">Manual</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Reference (optional)</label>
+                  <input value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value.toUpperCase() })}
+                    placeholder="Auto-assigned" className="input" />
+                </div>
+                <div className="col-span-2">
+                  <label className="label">Customer</label>
+                  <input value={form.customer} onChange={(e) => setForm({ ...form, customer: e.target.value })}
+                    placeholder="Customer name" required className="input" />
+                </div>
+                <div>
+                  <label className="label">Origin</label>
+                  <input value={form.origin} onChange={(e) => setForm({ ...form, origin: e.target.value })}
+                    placeholder="Collection address / DC" required className="input" />
+                </div>
+                <div>
+                  <label className="label">Destination</label>
+                  <input value={form.destination} onChange={(e) => setForm({ ...form, destination: e.target.value })}
+                    placeholder="Delivery address" required className="input" />
+                </div>
+                <div>
+                  <label className="label">Collection Date</label>
+                  <input type="datetime-local" value={form.collectionDate} onChange={(e) => setForm({ ...form, collectionDate: e.target.value })}
+                    required className="input" />
+                </div>
+                <div>
+                  <label className="label">ETA</label>
+                  <input type="datetime-local" value={form.eta} onChange={(e) => setForm({ ...form, eta: e.target.value })}
+                    required className="input" />
+                </div>
+                <div>
+                  <label className="label">Subcontractor</label>
+                  <input value={form.subcontractor} onChange={(e) => setForm({ ...form, subcontractor: e.target.value })}
+                    placeholder="Carrier name (optional)" className="input" />
+                </div>
+                <div>
+                  <label className="label">Sub Reference</label>
+                  <input value={form.subcontractorRef} onChange={(e) => setForm({ ...form, subcontractorRef: e.target.value.toUpperCase() })}
+                    placeholder="Sub's job ref (optional)" className="input" />
+                </div>
+                <div className="col-span-2 lg:col-span-4">
+                  <label className="label">Notes</label>
+                  <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                    placeholder="Any booking notes…" rows={2}
+                    className="input resize-none" />
+                </div>
+              </div>
+              <button type="submit" disabled={saving}
+                className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold rounded-lg px-6 py-2 text-sm transition-colors">
+                {saving ? "Booking…" : "Confirm Booking"}
+              </button>
+            </form>
+          )}
         </div>
       )}
 
@@ -310,6 +420,7 @@ export default function LoadsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs font-semibold uppercase tracking-wider text-slate-400 bg-slate-50">
+                <th className="px-4 py-3 w-6"></th>
                 <th className="px-4 py-3">Ref</th>
                 <th className="px-4 py-3">Src</th>
                 <th className="px-4 py-3">Customer</th>
@@ -323,11 +434,21 @@ export default function LoadsPage() {
             </thead>
             <tbody className="divide-y divide-slate-50">
               {loads.length === 0 && (
-                <tr><td colSpan={9} className="px-4 py-8 text-center text-slate-400">No loads</td></tr>
+                <tr><td colSpan={10} className="px-4 py-8 text-center text-slate-400">No loads</td></tr>
               )}
               {loads.map((l) => (
                 <>
                   <tr key={l.id} className="hover:bg-slate-50 align-top">
+                    {/* timeline toggle */}
+                    <td className="px-2 py-3 text-center">
+                      <button
+                        onClick={() => toggleTimeline(l)}
+                        title="View audit trail"
+                        className={`text-xs w-5 h-5 rounded transition-colors ${timelineRow === l.id ? "bg-slate-700 text-white" : "text-slate-300 hover:text-slate-600 hover:bg-slate-100"}`}
+                      >
+                        ≡
+                      </button>
+                    </td>
                     <td className="px-4 py-3 font-mono font-semibold text-slate-800 whitespace-nowrap">
                       {l.reference}
                       {l.rebookedFromId && (
@@ -373,43 +494,36 @@ export default function LoadsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">
-                        {/* Advance status */}
                         {nextStatus(l.status) && (
                           <ActionBtn onClick={() => advanceStatus(l)} disabled={working === l.id} colour="blue">
                             {STATUS_LABEL[nextStatus(l.status)!]} ▶
                           </ActionBtn>
                         )}
-                        {/* Mark failed */}
                         {["in_transit", "out_for_delivery", "collected"].includes(l.status) && (
                           <ActionBtn onClick={() => markFailed(l)} disabled={working === l.id} colour="red">
                             Failed
                           </ActionBtn>
                         )}
-                        {/* ETA update */}
                         {["booked", "collected", "in_transit", "out_for_delivery"].includes(l.status) && (
                           <ActionBtn onClick={() => { setEtaRow(etaRow === l.id ? null : l.id); setEtaVal(""); setEtaNote(""); }} colour="amber">
                             ETA ✏
                           </ActionBtn>
                         )}
-                        {/* POD chase */}
                         {l.status === "delivered" && l.podStatus === "pending" && (
                           <ActionBtn onClick={() => patch(l.id, { action: "pod_chase" })} disabled={working === l.id} colour="orange">
                             Chase POD
                           </ActionBtn>
                         )}
-                        {/* POD received */}
                         {l.status === "delivered" && l.podStatus !== "received" && (
                           <ActionBtn onClick={() => patch(l.id, { action: "pod_received" })} disabled={working === l.id} colour="green">
                             POD In
                           </ActionBtn>
                         )}
-                        {/* Rebook */}
                         {l.status === "failed" && (
                           <ActionBtn onClick={() => { setRebookRow(rebookRow === l.id ? null : l.id); setRbDate(""); setRbEta(""); setRbNotes(""); }} colour="purple">
                             Rebook
                           </ActionBtn>
                         )}
-                        {/* Reconcile sub */}
                         {l.subcontractor && !l.subcontractorReconciled && ["delivered", "pod_received"].includes(l.status) && (
                           <ActionBtn onClick={() => patch(l.id, { action: "reconcile" })} disabled={working === l.id} colour="teal">
                             Reconcile ✓
@@ -419,10 +533,41 @@ export default function LoadsPage() {
                     </td>
                   </tr>
 
+                  {/* Audit trail panel */}
+                  {timelineRow === l.id && (
+                    <tr key={`tl-${l.id}`}>
+                      <td colSpan={10} className="px-6 pb-3 pt-0">
+                        <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">
+                            Audit Trail — {l.reference}
+                          </p>
+                          {timelineLoading ? (
+                            <p className="text-xs text-slate-400">Loading…</p>
+                          ) : timeline.length === 0 ? (
+                            <p className="text-xs text-slate-400">No events recorded yet.</p>
+                          ) : (
+                            <ol className="relative border-l border-slate-200 ml-2 space-y-3">
+                              {timeline.map((t) => (
+                                <li key={t.id} className="ml-4">
+                                  <span className="absolute -left-1.5 mt-1 w-3 h-3 rounded-full bg-slate-300 border-2 border-white" />
+                                  <p className="text-xs text-slate-400 font-mono">{fmtTs(t.timestamp)}</p>
+                                  <p className="text-xs font-semibold text-slate-700 mt-0.5">{t.event}</p>
+                                  <p className="text-xs text-slate-500 font-mono mt-0.5">
+                                    {Object.entries(t.details).filter(([k]) => k !== "reference").map(([k, v]) => `${k}: ${v}`).join(" · ")}
+                                  </p>
+                                </li>
+                              ))}
+                            </ol>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+
                   {/* ETA inline panel */}
                   {etaRow === l.id && (
                     <tr key={`eta-${l.id}`}>
-                      <td colSpan={9} className="px-4 pb-3">
+                      <td colSpan={10} className="px-4 pb-3">
                         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex flex-wrap items-end gap-3">
                           <div>
                             <label className="label text-amber-700">New ETA</label>
@@ -445,7 +590,7 @@ export default function LoadsPage() {
                   {/* Rebook inline panel */}
                   {rebookRow === l.id && (
                     <tr key={`rb-${l.id}`}>
-                      <td colSpan={9} className="px-4 pb-3">
+                      <td colSpan={10} className="px-4 pb-3">
                         <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 flex flex-wrap items-end gap-3">
                           <div>
                             <label className="label text-purple-700">New Collection Date</label>
