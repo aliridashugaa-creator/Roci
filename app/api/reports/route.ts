@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { db, seedIfNeeded } from "@/lib/db";
+import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  await seedIfNeeded();
 
   const [inventory, transfers, discrepancies] = await Promise.all([
     db.getInventory(),

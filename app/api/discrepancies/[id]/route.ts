@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { db, seedIfNeeded, logEvent } from "@/lib/db";
+import { db, logEvent } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -7,7 +7,6 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  await seedIfNeeded();
   const { id } = await params;
   const { status, notes } = await req.json();
 

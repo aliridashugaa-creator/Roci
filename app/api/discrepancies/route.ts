@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
-import { db, seedIfNeeded, logEvent } from "@/lib/db";
+import { db, logEvent } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  await seedIfNeeded();
   return NextResponse.json(await db.getDiscrepancies());
 }
 
 export async function POST(req: Request) {
-  await seedIfNeeded();
   const { sku, expectedQty, actualQty, location, notes } = await req.json();
 
   if (!sku || expectedQty == null || actualQty == null || !location) {

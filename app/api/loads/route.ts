@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
-import { db, seedIfNeeded, logEvent } from "@/lib/db";
+import { db, logEvent } from "@/lib/db";
 import type { Load } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  await seedIfNeeded();
   const { searchParams } = new URL(req.url);
   const filter = searchParams.get("filter");
 
@@ -22,7 +21,6 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  await seedIfNeeded();
   const body = await req.json();
   const { source, customer, origin, destination, collectionDate, eta, subcontractor, subcontractorRef, notes, reference } = body;
 

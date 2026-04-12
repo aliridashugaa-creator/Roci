@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
-import { db, seedIfNeeded, logEvent } from "@/lib/db";
+import { db, logEvent } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  await seedIfNeeded();
   return NextResponse.json(await db.getInventory());
 }
 
 export async function POST(req: Request) {
-  await seedIfNeeded();
   const { sku, quantity, palletId } = await req.json();
 
   if (!sku || !quantity || !palletId) {

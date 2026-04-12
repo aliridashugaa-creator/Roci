@@ -12,6 +12,7 @@ const nav = [
   { href: "/transfers", label: "Transfers", icon: "⇄" },
   { href: "/discrepancies", label: "Discrepancies", icon: "⚠" },
   { href: "/reports", label: "Reports", icon: "≡" },
+  { href: "/admin", label: "DB Admin", icon: "⬡" },
 ];
 
 export default function Sidebar() {

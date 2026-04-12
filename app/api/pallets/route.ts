@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
-import { db, seedIfNeeded, logEvent } from "@/lib/db";
+import { db, logEvent } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  await seedIfNeeded();
   return NextResponse.json(await db.getPallets());
 }
 
 export async function PATCH(req: Request) {
-  await seedIfNeeded();
   const { palletId, newLocation } = await req.json();
 
   if (!palletId || !newLocation) {
