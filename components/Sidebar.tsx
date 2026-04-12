@@ -4,15 +4,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const nav = [
-  { href: "/", label: "Dashboard", icon: "▦" },
-  { href: "/loads", label: "Load Admin", icon: "⊡" },
+  { href: "/", label: "Operations Overview", icon: "▦" },
+  { href: "/loads", label: "Load Management", icon: "⊡" },
   { href: "/stock", label: "Stock", icon: "▣" },
   { href: "/pallets", label: "Pallets", icon: "⊞" },
-  { href: "/goods-in", label: "Goods In", icon: "↓" },
+  { href: "/goods-in", label: "Inbound", icon: "↓" },
   { href: "/transfers", label: "Transfers", icon: "⇄" },
   { href: "/discrepancies", label: "Discrepancies", icon: "⚠" },
   { href: "/reports", label: "Reports", icon: "≡" },
-  { href: "/admin", label: "DB Admin", icon: "⬡" },
+  { href: "/admin", label: "System Admin", icon: "⬡" },
 ];
 
 export default function Sidebar() {
