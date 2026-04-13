@@ -215,10 +215,10 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
 
 export async function POST(req: Request) {
   try {
-  const { messages } = await req.json() as { messages: Anthropic.MessageParam[] };
+  const { messages, page } = await req.json() as { messages: Anthropic.MessageParam[]; page?: string };
 
   const today = new Date().toISOString().split("T")[0];
-  const system = `You are Roci, an AI operations assistant built into a logistics OS. You have live access to loads, inventory, transfers, and discrepancies.
+  const system = `You are Roci, an AI operations assistant built into a logistics OS. You have live access to loads, inventory, transfers, and discrepancies.${page ? `\nThe user is currently viewing: ${page}.` : ""}
 
 You can:
 - Answer questions about current operations (loads, stock, transfers, discrepancies)

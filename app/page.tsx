@@ -3,6 +3,76 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
+// ── AI insights ───────────────────────────────────────────────────────────────
+interface Insight {
+  summary: string;
+  alerts: { level: "red" | "amber" | "green"; text: string }[];
+  recommendations: string[];
+}
+
+const ALERT_STYLE = {
+  red:   { bar: "bg-red-500",   bg: "bg-red-50",   text: "text-red-700"  },
+  amber: { bar: "bg-amber-400", bg: "bg-amber-50",  text: "text-amber-700" },
+  green: { bar: "bg-green-500", bg: "bg-green-50",  text: "text-green-700" },
+};
+
+function AiInsightsCard() {
+  const [insight, setInsight] = useState<Insight | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/ai-insights")
+      .then((r) => r.json())
+      .then((d) => { setInsight(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="bg-slate-900 rounded-xl p-5 mb-6 animate-pulse">
+        <div className="h-4 w-48 bg-slate-700 rounded mb-3" />
+        <div className="h-3 w-full bg-slate-700 rounded mb-2" />
+        <div className="h-3 w-3/4 bg-slate-700 rounded" />
+      </div>
+    );
+  }
+  if (!insight) return null;
+
+  return (
+    <div className="bg-slate-900 rounded-xl p-5 mb-6">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="w-2 h-2 rounded-full bg-green-400" />
+        <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Roci AI · Operational Snapshot</span>
+      </div>
+      <p className="text-white text-sm font-medium mb-4">{insight.summary}</p>
+
+      {insight.alerts.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+          {insight.alerts.map((a, i) => {
+            const s = ALERT_STYLE[a.level];
+            return (
+              <div key={i} className={`flex items-start gap-2 ${s.bg} rounded-lg px-3 py-2`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${s.bar} mt-1.5 shrink-0`} />
+                <span className={`text-xs font-medium ${s.text}`}>{a.text}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {insight.recommendations.length > 0 && (
+        <div className="border-t border-slate-700 pt-3 space-y-1">
+          {insight.recommendations.map((r, i) => (
+            <p key={i} className="text-slate-400 text-xs flex items-start gap-2">
+              <span className="text-blue-400 mt-0.5">→</span> {r}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface Stats {
   totalSKUs: number;
   totalUnits: number;
@@ -129,6 +199,9 @@ export default function OperationsOverview() {
           </div>
         </div>
       </div>
+
+      {/* AI insights */}
+      <AiInsightsCard />
 
       {/* KPI cards */}
       {stats ? (

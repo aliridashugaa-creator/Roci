@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(git push:*)",
+      "Bash(vercel --version)",
+      "Bash(vercel whoami:*)",
+      "Bash(vercel --prod --yes)",
+      "Bash(git commit -m 'fix: set framework nextjs in vercel.json to restore framework detection:*)",
+      "Bash(sed -i 's/import { db, seedIfNeeded, logEvent } from \"@\\\\/lib\\\\/db\";/import { db, logEvent } from \"@\\\\/lib\\\\/db\";/g' app/api/inventory/route.ts app/api/pallets/route.ts app/api/goods-in/route.ts app/api/transfers/route.ts 'app/api/transfers/[id]/route.ts' app/api/discrepancies/route.ts 'app/api/discrepancies/[id]/route.ts' app/api/loads/route.ts 'app/api/loads/[id]/route.ts')",
+      "Bash(sed -i 's/import { db, seedIfNeeded } from \"@\\\\/lib\\\\/db\";/import { db } from \"@\\\\/lib\\\\/db\";/g' app/api/reports/route.ts app/api/transactions/route.ts)",
+      "Bash(sed -i '/await seedIfNeeded\\(\\);/d' app/api/inventory/route.ts app/api/pallets/route.ts app/api/goods-in/route.ts app/api/transfers/route.ts 'app/api/transfers/[id]/route.ts' app/api/discrepancies/route.ts 'app/api/discrepancies/[id]/route.ts' app/api/loads/route.ts 'app/api/loads/[id]/route.ts' app/api/reports/route.ts app/api/transactions/route.ts)",
+      "Bash(vercel env:*)",
+      "Bash(npx tsc:*)",
+      "Bash(vercel logs:*)",
+      "Bash(vercel inspect:*)",
+      "Bash(vercel --prod)",
+      "Bash(curl -s -X POST https://roci-two.vercel.app/api/seed)",
+      "Bash(python -m json.tool)",
+      "Bash(curl -s -X POST https://roci-two.vercel.app/api/chat -H \"Content-Type: application/json\" -d '{\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}]}' -w \"\\\\nHTTP:%{http_code}\")",
+      "Bash(curl -s -X POST https://roci-two.vercel.app/api/chat -H 'Content-Type: application/json' -d '{\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}]}')",
+      "Bash(curl -v -X POST https://roci-two.vercel.app/api/chat -H 'Content-Type: application/json' -d '{\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}]}')",
+      "Bash(curl -s -X POST https://roci-two.vercel.app/api/chat -H \"Content-Type: application/json\" -d '{\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}]}')"
+    ]
+  }
+}
