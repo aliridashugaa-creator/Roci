@@ -214,6 +214,7 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
 // ── POST handler ──────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
+  try {
   const { messages } = await req.json() as { messages: Anthropic.MessageParam[] };
 
   const today = new Date().toISOString().split("T")[0];
@@ -275,4 +276,9 @@ Guidelines:
   }
 
   return NextResponse.json({ content: "I wasn't able to complete that request.", actions });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("Chat route error:", msg);
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }
