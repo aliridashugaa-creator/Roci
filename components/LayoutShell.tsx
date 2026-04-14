@@ -42,8 +42,9 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
       {/* Floating restore button when fully hidden */}
       {mode === "hidden" && (
         <button
-          onClick={() => setAndSave("minimised")}
-          className="fixed bottom-6 right-6 z-50 h-12 px-5 rounded-full bg-blue-600 hover:bg-blue-700 shadow-lg flex items-center gap-2 transition-colors"
+          onClick={() => setAndSave("full")}
+          className="fixed bottom-6 right-6 z-50 h-12 px-5 rounded-full shadow-lg flex items-center gap-2 transition-all hover:-translate-y-0.5 hover:shadow-xl"
+          style={{ background: "linear-gradient(135deg, #2563eb, #4f46e5)" }}
         >
           <span className="text-white font-bold text-sm">Roci AI</span>
           <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">

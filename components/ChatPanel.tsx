@@ -197,21 +197,25 @@ export default function ChatPanel({ mode, onModeChange }: Props) {
               <button
                 onClick={() => onModeChange("minimised")}
                 className="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg border border-slate-600 text-slate-300 hover:text-white hover:border-slate-400 transition-all duration-150"
+                title="Move AI to side panel"
               >
+                {/* side-panel icon */}
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 9V4.5M9 9H4.5M9 9 3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5 5.25 5.25" />
+                  <rect x="3" y="3" width="18" height="18" rx="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <line x1="15" y1="3" x2="15" y2="21" strokeLinecap="round" />
                 </svg>
-                Minimise
+                Move to side
               </button>
             ) : (
               <button
                 onClick={() => onModeChange("full")}
                 className="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-all duration-150 shadow-md shadow-blue-900/40"
+                title="Open full screen"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
                 </svg>
-                Expand
+                Full screen
               </button>
             )}
             <button
