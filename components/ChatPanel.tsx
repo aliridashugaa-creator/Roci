@@ -78,14 +78,37 @@ const ACTION_LABEL: Record<string, string> = {
   update_load:         "Updated load",
 };
 
-const SUGGESTIONS = [
-  { text: "What needs attention right now?",        icon: "⚡" },
-  { text: "Give me a full operations summary",       icon: "📊" },
-  { text: "Any loads at risk today?",                icon: "🚛" },
-  { text: "Which PODs are outstanding?",             icon: "📋" },
-  { text: "Show me failed deliveries",               icon: "⚠️" },
-  { text: "What subcontractors need reconciling?",   icon: "✓"  },
+const ALL_SUGGESTIONS = [
+  { text: "What needs attention right now?",              icon: "⚡" },
+  { text: "Give me a full operations summary",             icon: "📊" },
+  { text: "Any loads at risk today?",                      icon: "🚛" },
+  { text: "Which PODs are outstanding?",                   icon: "📋" },
+  { text: "Show me failed deliveries",                     icon: "⚠️" },
+  { text: "What subcontractors need reconciling?",         icon: "✓"  },
+  { text: "How many active loads are in transit?",         icon: "🔄" },
+  { text: "Are there any open discrepancies?",             icon: "🔍" },
+  { text: "Which loads haven't moved status today?",       icon: "📍" },
+  { text: "What's our current stock situation?",           icon: "📦" },
+  { text: "Any transfers pending completion?",             icon: "↔️" },
+  { text: "Which customers have the most active loads?",   icon: "👤" },
+  { text: "Flag anything overdue or delayed",              icon: "🕐" },
+  { text: "Which loads were booked today?",                icon: "📅" },
+  { text: "Any subcontractors with multiple open jobs?",   icon: "🏢" },
+  { text: "What's been reconciled this week?",             icon: "✅" },
+  { text: "Show loads that haven't been collected yet",    icon: "⏳" },
+  { text: "Are there any stock shortages I should know about?", icon: "📉" },
+  { text: "Which deliveries are out for delivery now?",    icon: "🚚" },
+  { text: "Summarise discrepancies by location",           icon: "🗺️" },
+  { text: "What's the POD chase status across all loads?", icon: "📬" },
+  { text: "Any loads rebooked from previous failures?",    icon: "🔁" },
+  { text: "Which goods-in docs came in recently?",         icon: "📥" },
+  { text: "Give me a risk summary for today's operations", icon: "🎯" },
 ];
+
+function pickSuggestions() {
+  const shuffled = [...ALL_SUGGESTIONS].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, 6);
+}
 
 // ── props ─────────────────────────────────────────────────────────────────────
 interface Props {
@@ -99,6 +122,7 @@ export default function ChatPanel({ mode, onModeChange }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
+  const [suggestions] = useState(() => pickSuggestions());
   const [openNav, setOpenNav] = useState<string | null>(null);
   const navRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -314,7 +338,7 @@ export default function ChatPanel({ mode, onModeChange }: Props) {
               )}
 
               <div className={`grid gap-2.5 w-full ${isFull ? "grid-cols-2 max-w-2xl" : "grid-cols-1"}`}>
-                {SUGGESTIONS.map((s, i) => (
+                {suggestions.map((s, i) => (
                   <button
                     key={s.text}
                     onClick={() => send(s.text)}
