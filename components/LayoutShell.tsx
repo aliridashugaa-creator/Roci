@@ -11,8 +11,6 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem("roci-ai-mode") as PanelMode | null;
-    if (saved) setMode(saved);
     setMounted(true);
   }, []);
 
