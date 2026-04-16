@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     items: body.items ?? [],
     origin: body.origin.trim(),
     destination: body.destination.trim(),
-    carrier: body.carrier ?? "",
+    driver: body.driver ?? "",
     trackingRef: body.trackingRef ?? "",
     status: body.status ?? "pending",
     scheduledDate: body.scheduledDate ?? null,

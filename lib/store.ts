@@ -81,7 +81,7 @@ export interface TransportJob {
   items: TransportItem[];
   origin: string;
   destination: string;
-  carrier: string;
+  driver: string;
   trackingRef: string;
   status: "pending" | "in_transit" | "delivered" | "cancelled";
   scheduledDate: string | null;

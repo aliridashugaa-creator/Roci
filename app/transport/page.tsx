@@ -16,7 +16,7 @@ const MapView = dynamic(() => import("./MapView"), {
 const inp = "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
 
 const BLANK = {
-  origin: "", destination: "", carrier: "", trackingRef: "",
+  origin: "", destination: "", driver: "", trackingRef: "",
   status: "pending" as TransportJob["status"],
   scheduledDate: "", deliveredDate: "", notes: "",
 };
@@ -71,7 +71,7 @@ export default function TransportPage() {
   const openEdit = (j: TransportJob) => {
     setIsNew(false); setSelected(j);
     setForm({
-      origin: j.origin, destination: j.destination, carrier: j.carrier,
+      origin: j.origin, destination: j.destination, driver: j.driver ?? "",
       trackingRef: j.trackingRef, status: j.status,
       scheduledDate: j.scheduledDate ?? "", deliveredDate: j.deliveredDate ?? "",
       notes: j.notes,
@@ -195,7 +195,7 @@ export default function TransportPage() {
                 </div>
                 <p className="text-xs text-slate-700 truncate">{j.origin} → {j.destination}</p>
                 <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400">
-                  {j.carrier && <span>{j.carrier}</span>}
+                  {j.driver && <span>🚛 {j.driver}</span>}
                   {j.scheduledDate && <span>ETA {j.scheduledDate}</span>}
                   {kg > 0 && <span>{kg.toFixed(1)} kg</span>}
                 </div>
@@ -235,7 +235,7 @@ export default function TransportPage() {
                 <Field label="Destination *"><input value={form.destination} onChange={e => f("destination", e.target.value)} placeholder="e.g. Manchester" className={inp} /></Field>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Carrier"><input value={form.carrier} onChange={e => f("carrier", e.target.value)} placeholder="DHL, FedEx…" className={inp} /></Field>
+                <Field label="Driver"><input value={form.driver} onChange={e => f("driver", e.target.value)} placeholder="Driver name" className={inp} /></Field>
                 <Field label="Tracking Ref"><input value={form.trackingRef} onChange={e => f("trackingRef", e.target.value)} className={inp} /></Field>
               </div>
               <Field label="Status">
