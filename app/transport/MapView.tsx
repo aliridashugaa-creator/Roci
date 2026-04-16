@@ -124,6 +124,7 @@ export default function MapView({ jobs, skus, selectedId, onSelect }: Props) {
 
   const [routes,  setRoutes]  = useState<RouteEntry[]>([]);
   const [loading, setLoading] = useState(0);
+  const [zoom,    setZoom]    = useState(5.5);
 
   // ── init map ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -143,7 +144,9 @@ export default function MapView({ jobs, skus, selectedId, onSelect }: Props) {
     });
     mapRef.current = map;
 
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true, showZoom: false }), "top-right");
+
+    map.on("zoom", () => setZoom(map.getZoom()));
 
     // ── smooth auto-pitch: fires AFTER zoom animation ends, never fights it ──
     map.on("zoomend", () => {
@@ -363,6 +366,30 @@ export default function MapView({ jobs, skus, selectedId, onSelect }: Props) {
           Plotting {loading} route{loading !== 1 ? "s" : ""}…
         </div>
       )}
+
+      {/* zoom slider */}
+      <div className="absolute right-3 top-12 z-10 flex flex-col items-center gap-1 bg-white/95 shadow rounded-xl px-1 py-2 select-none">
+        <button
+          className="w-6 h-6 flex items-center justify-center text-slate-600 hover:text-slate-900 font-bold text-base leading-none rounded hover:bg-slate-100"
+          onClick={() => { const z = Math.min(18, zoom + 1); mapRef.current?.easeTo({ zoom: z, duration: 200 }); }}
+          aria-label="Zoom in"
+        >+</button>
+        <div style={{ height: 120, width: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <input
+            type="range"
+            min={5} max={18} step={0.1}
+            value={zoom}
+            onChange={e => { const z = parseFloat(e.target.value); mapRef.current?.easeTo({ zoom: z, duration: 150 }); }}
+            style={{ width: 120, transform: "rotate(-90deg)", accentColor: "#3b82f6" }}
+            aria-label="Zoom level"
+          />
+        </div>
+        <button
+          className="w-6 h-6 flex items-center justify-center text-slate-600 hover:text-slate-900 font-bold text-base leading-none rounded hover:bg-slate-100"
+          onClick={() => { const z = Math.max(5, zoom - 1); mapRef.current?.easeTo({ zoom: z, duration: 200 }); }}
+          aria-label="Zoom out"
+        >−</button>
+      </div>
 
       {/* legend */}
       <div className="absolute bottom-8 left-3 z-10 bg-white/95 shadow-sm rounded-xl px-3 py-2.5 space-y-1.5 pointer-events-none">
