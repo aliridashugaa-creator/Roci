@@ -340,17 +340,6 @@ export default function SKUEditor() {
                 </div>
                 <Field label="Subcategory"><Input value={form.subcategory} onChange={e => f("subcategory", e.target.value)} placeholder="Optional" /></Field>
               </div>
-              {/* category management chips */}
-              {categories.length > 0 && !addingCat && (
-                <div className="flex flex-wrap gap-1 pt-1">
-                  {categories.map(c => (
-                    <span key={c} className="inline-flex items-center gap-1 bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full">
-                      {c}
-                      <button onClick={() => removeCategory(c)} className="text-slate-400 hover:text-red-500 leading-none font-bold">×</button>
-                    </span>
-                  ))}
-                </div>
-              )}
             </Section>
 
             {/* Sourcing */}
