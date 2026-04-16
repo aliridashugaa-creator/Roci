@@ -1,321 +1,295 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import type { SKU, Supplier } from "@/lib/store";
 
-// ── AI insights ───────────────────────────────────────────────────────────────
-interface Insight {
-  summary: string;
-  alerts: { level: "red" | "amber" | "green"; text: string }[];
-  recommendations: string[];
-}
+// ── constants ─────────────────────────────────────────────────────────────────
+const CATEGORIES = ["Electronics", "Fashion", "Home & Garden", "Grocery", "Automotive", "Health & Beauty", "Tools", "Sports", "Toys", "Office", "Other"];
+const UOM_OPTIONS = ["each", "pair", "pack", "box", "pallet", "kg", "g", "litre", "ml", "metre", "cm"];
+const STATUS_OPTS: SKU["status"][] = ["active", "inactive", "discontinued"];
 
-const ALERT_STYLE = {
-  red:   { bar: "bg-red-500",   bg: "bg-red-50",   text: "text-red-700"  },
-  amber: { bar: "bg-amber-400", bg: "bg-amber-50",  text: "text-amber-700" },
-  green: { bar: "bg-green-500", bg: "bg-green-50",  text: "text-green-700" },
+const STATUS_BADGE: Record<SKU["status"], string> = {
+  active:       "bg-green-100 text-green-700",
+  inactive:     "bg-amber-100 text-amber-700",
+  discontinued: "bg-red-100 text-red-700",
 };
 
-function AiInsightsCard() {
-  const [insight, setInsight] = useState<Insight | null>(null);
-  const [loading, setLoading] = useState(true);
+const BLANK: Omit<SKU, "id" | "createdAt" | "updatedAt"> = {
+  code: "", name: "", description: "", category: "", subcategory: "",
+  supplierId: "", supplierCode: "", unitOfMeasure: "each",
+  costPrice: null, salePrice: null, weight: null, dimensions: "",
+  barcode: "", minStockLevel: null, reorderPoint: null, leadTimeDays: null,
+  status: "active", notes: "",
+};
 
-  useEffect(() => {
-    fetch("/api/ai-insights")
-      .then((r) => r.json())
-      .then((d) => { setInsight(d); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="bg-slate-900 rounded-xl p-5 mb-6 animate-pulse">
-        <div className="h-4 w-48 bg-slate-700 rounded mb-3" />
-        <div className="h-3 w-full bg-slate-700 rounded mb-2" />
-        <div className="h-3 w-3/4 bg-slate-700 rounded" />
-      </div>
-    );
-  }
-  if (!insight) return null;
-
+// ── helpers ───────────────────────────────────────────────────────────────────
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="bg-slate-900 rounded-xl p-5 mb-6">
-      <div className="flex items-center gap-2 mb-3">
-        <span className="w-2 h-2 rounded-full bg-green-400" />
-        <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Roci AI · Operational Snapshot</span>
-      </div>
-      <p className="text-white text-sm font-medium mb-4">{insight.summary}</p>
-
-      {insight.alerts.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
-          {insight.alerts.map((a, i) => {
-            const s = ALERT_STYLE[a.level];
-            return (
-              <div key={i} className={`flex items-start gap-2 ${s.bg} rounded-lg px-3 py-2`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${s.bar} mt-1.5 shrink-0`} />
-                <span className={`text-xs font-medium ${s.text}`}>{a.text}</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {insight.recommendations.length > 0 && (
-        <div className="border-t border-slate-700 pt-3 space-y-1">
-          {insight.recommendations.map((r, i) => (
-            <p key={i} className="text-slate-400 text-xs flex items-start gap-2">
-              <span className="text-blue-400 mt-0.5">→</span> {r}
-            </p>
-          ))}
-        </div>
-      )}
+    <div>
+      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">{label}</label>
+      {children}
     </div>
   );
 }
-
-interface Stats {
-  totalSKUs: number;
-  totalUnits: number;
-  activeTransfers: number;
-  openDiscrepancies: number;
+function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return <input {...props} className={`w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white ${props.className ?? ""}`} />;
+}
+function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return <select {...props} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />;
 }
 
-interface Transaction {
-  id: number;
-  timestamp: string;
-  event: string;
-  details: Record<string, unknown>;
-}
+// ── component ─────────────────────────────────────────────────────────────────
+export default function SKUEditor() {
+  const [skus, setSkus] = useState<SKU[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [search, setSearch] = useState("");
+  const [filterCat, setFilterCat] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+  const [selected, setSelected] = useState<SKU | null>(null);
+  const [isNew, setIsNew] = useState(false);
+  const [form, setForm] = useState<typeof BLANK>(BLANK);
+  const [saving, setSaving] = useState(false);
+  const [flash, setFlash] = useState<{ msg: string; ok: boolean } | null>(null);
 
-// ── KPI status logic ──────────────────────────────────────────────────────────
-type Health = "green" | "amber" | "red" | "neutral";
-
-function kpiStyle(h: Health) {
-  return {
-    green:   { border: "border-green-500",  badge: "bg-green-50 text-green-700",  dot: "bg-green-500"  },
-    amber:   { border: "border-amber-400",  badge: "bg-amber-50 text-amber-700",  dot: "bg-amber-400"  },
-    red:     { border: "border-red-500",    badge: "bg-red-50 text-red-700",      dot: "bg-red-500"    },
-    neutral: { border: "border-slate-300",  badge: "bg-slate-100 text-slate-500", dot: "bg-slate-300"  },
-  }[h];
-}
-
-function StatCard({
-  title, value, context, health, statusLabel,
-}: {
-  title: string;
-  value: string | number;
-  context: string;
-  health: Health;
-  statusLabel: string;
-}) {
-  const s = kpiStyle(health);
-  return (
-    <div className={`bg-white rounded-xl p-5 shadow-sm border-l-4 ${s.border}`}>
-      <div className="flex items-start justify-between mb-2">
-        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{title}</p>
-        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${s.badge}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
-          {statusLabel}
-        </span>
-      </div>
-      <p className="text-3xl font-bold text-slate-800">{value}</p>
-      <p className="text-xs text-slate-400 mt-1">{context}</p>
-    </div>
-  );
-}
-
-// ── activity event helpers ────────────────────────────────────────────────────
-type Module = "all" | "loads" | "inventory" | "transfers" | "discrepancies";
-
-function eventModule(event: string): Module {
-  if (event.includes("LOAD") || event.includes("POD") || event.includes("SUB") || event.includes("REBOOK")) return "loads";
-  if (event.includes("ARRIVAL") || event.includes("GOODS") || event.includes("PALLET") || event.includes("STOCK")) return "inventory";
-  if (event.includes("TRANSFER")) return "transfers";
-  if (event.includes("DISCREPANCY")) return "discrepancies";
-  return "all";
-}
-
-function eventColor(event: string) {
-  const m = eventModule(event);
-  if (m === "loads")         return "bg-indigo-100 text-indigo-700";
-  if (m === "inventory")     return "bg-green-100 text-green-700";
-  if (m === "transfers")     return "bg-blue-100 text-blue-700";
-  if (m === "discrepancies") return "bg-red-100 text-red-700";
-  return "bg-slate-100 text-slate-600";
-}
-
-const MODULE_LABELS: Record<Module, string> = {
-  all: "All", loads: "Loads", inventory: "Inventory",
-  transfers: "Transfers", discrepancies: "Discrepancies",
-};
-
-// ── quick actions ─────────────────────────────────────────────────────────────
-const QUICK_ACTIONS = [
-  { label: "New Booking",   href: "/loads",         colour: "bg-blue-600 hover:bg-blue-700 text-white" },
-  { label: "Goods In",      href: "/goods-in",      colour: "bg-green-600 hover:bg-green-700 text-white" },
-  { label: "Transfer",      href: "/transfers",     colour: "bg-indigo-600 hover:bg-indigo-700 text-white" },
-  { label: "Discrepancy",   href: "/discrepancies", colour: "bg-red-600 hover:bg-red-700 text-white" },
-];
-
-// ── page ──────────────────────────────────────────────────────────────────────
-export default function OperationsOverview() {
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [txns, setTxns] = useState<Transaction[]>([]);
-  const [moduleFilter, setModuleFilter] = useState<Module>("all");
-
-  useEffect(() => {
-    fetch("/api/reports").then((r) => r.json()).then((d) => setStats(d.summary));
-    fetch("/api/transactions?limit=50").then((r) => r.json()).then(setTxns);
+  const reload = useCallback(async () => {
+    const [s, sup] = await Promise.all([fetch("/api/skus").then(r => r.json()), fetch("/api/suppliers").then(r => r.json())]);
+    setSkus(s); setSuppliers(sup);
   }, []);
 
-  const filtered = moduleFilter === "all"
-    ? txns
-    : txns.filter((t) => eventModule(t.event) === moduleFilter);
+  useEffect(() => { reload(); }, [reload]);
 
-  const discHealth = (n: number): Health => n === 0 ? "green" : n <= 2 ? "amber" : "red";
-  const transferHealth = (n: number): Health => n === 0 ? "neutral" : n <= 3 ? "green" : "amber";
+  const showFlash = (msg: string, ok = true) => {
+    setFlash({ msg, ok });
+    setTimeout(() => setFlash(null), 3500);
+  };
 
+  const openNew = () => {
+    setIsNew(true); setSelected(null); setForm(BLANK);
+  };
+
+  const openEdit = (sku: SKU) => {
+    setIsNew(false); setSelected(sku);
+    setForm({ code: sku.code, name: sku.name, description: sku.description, category: sku.category, subcategory: sku.subcategory, supplierId: sku.supplierId, supplierCode: sku.supplierCode, unitOfMeasure: sku.unitOfMeasure, costPrice: sku.costPrice, salePrice: sku.salePrice, weight: sku.weight, dimensions: sku.dimensions, barcode: sku.barcode, minStockLevel: sku.minStockLevel, reorderPoint: sku.reorderPoint, leadTimeDays: sku.leadTimeDays, status: sku.status, notes: sku.notes });
+  };
+
+  const closePanel = () => { setSelected(null); setIsNew(false); };
+
+  const f = (k: keyof typeof BLANK, v: unknown) => setForm(prev => ({ ...prev, [k]: v }));
+  const num = (v: string) => v === "" ? null : Number(v);
+
+  const save = async () => {
+    if (!form.code.trim() || !form.name.trim()) { showFlash("Code and name are required", false); return; }
+    setSaving(true);
+    try {
+      const res = isNew
+        ? await fetch("/api/skus", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) })
+        : await fetch(`/api/skus/${selected!.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+      const data = await res.json();
+      if (!res.ok) { showFlash(data.error ?? "Save failed", false); return; }
+      showFlash(isNew ? `${data.code} created` : `${data.code} saved`);
+      await reload();
+      if (isNew) { openEdit(data); setIsNew(false); }
+    } finally { setSaving(false); }
+  };
+
+  const deleteSKU = async () => {
+    if (!selected || !confirm(`Delete ${selected.code}? This cannot be undone.`)) return;
+    await fetch(`/api/skus/${selected.id}`, { method: "DELETE" });
+    showFlash(`${selected.code} deleted`);
+    closePanel(); await reload();
+  };
+
+  // ── filter ───────────────────────────────────────────────────────────────
+  const visible = skus.filter((s) => {
+    const q = search.toLowerCase();
+    if (q && !s.code.toLowerCase().includes(q) && !s.name.toLowerCase().includes(q)) return false;
+    if (filterCat && s.category !== filterCat) return false;
+    if (filterStatus && s.status !== filterStatus) return false;
+    return true;
+  });
+
+  const supplierName = (id: string) => suppliers.find(s => s.id === id)?.name ?? "—";
+  const panelOpen = selected !== null || isNew;
+
+  // ── render ────────────────────────────────────────────────────────────────
   return (
-    <div className="p-8">
-      {/* header row */}
-      <div className="mb-8 flex items-start justify-between gap-6">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">Operations Overview</h2>
-          <p className="text-slate-500 text-sm mt-1">
-            {new Date().toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
-          </p>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="flex flex-col gap-2 shrink-0">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-0.5">Quick Actions</p>
-          <div className="flex gap-2 flex-wrap justify-end">
-            {QUICK_ACTIONS.map(({ label, href, colour }) => (
-              <Link key={href} href={href}
-                className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${colour}`}>
-                + {label}
-              </Link>
-            ))}
+    <div className="flex h-full">
+      {/* ── table pane ── */}
+      <div className="flex flex-col flex-1 min-w-0">
+        {/* toolbar */}
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-200 bg-white shrink-0 flex-wrap">
+          <div className="flex-1 min-w-0">
+            <h2 className="text-lg font-bold text-slate-800">SKU Editor</h2>
+            <p className="text-xs text-slate-400">{skus.length} SKUs · {suppliers.length} suppliers</p>
           </div>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search code or name…"
+            className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-52" />
+          <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
+            className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">All categories</option>
+            {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+          </select>
+          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+            className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">All statuses</option>
+            {STATUS_OPTS.map(s => <option key={s}>{s}</option>)}
+          </select>
+          <button onClick={openNew}
+            className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors shrink-0">
+            + New SKU
+          </button>
         </div>
-      </div>
 
-      {/* AI insights */}
-      <AiInsightsCard />
-
-      {/* KPI cards */}
-      {stats ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-          <StatCard
-            title="Total SKUs"
-            value={stats.totalSKUs}
-            context="Distinct product lines · All locations"
-            health="neutral"
-            statusLabel="Catalogue"
-          />
-          <StatCard
-            title="Total Units"
-            value={stats.totalUnits.toLocaleString()}
-            context="On-hand stock · All locations"
-            health={stats.totalUnits > 0 ? "green" : "amber"}
-            statusLabel={stats.totalUnits > 0 ? "Healthy" : "Attention"}
-          />
-          <StatCard
-            title="Active Transfers"
-            value={stats.activeTransfers}
-            context="Pending or in transit · Today"
-            health={transferHealth(stats.activeTransfers)}
-            statusLabel={stats.activeTransfers === 0 ? "None open" : "In progress"}
-          />
-          <StatCard
-            title="Open Discrepancies"
-            value={stats.openDiscrepancies}
-            context="Unresolved · Last 7 days"
-            health={discHealth(stats.openDiscrepancies)}
-            statusLabel={
-              stats.openDiscrepancies === 0 ? "All clear"
-              : stats.openDiscrepancies <= 2 ? "Attention"
-              : "Action required"
-            }
-          />
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-          {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="bg-white rounded-xl p-5 shadow-sm animate-pulse h-28" />
-          ))}
-        </div>
-      )}
-
-      {/* Recent Activity */}
-      <div className="bg-white rounded-xl shadow-sm">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
-          <h3 className="font-semibold text-slate-700">Recent Activity</h3>
-
-          {/* module filter */}
-          <div className="flex gap-1">
-            {(Object.keys(MODULE_LABELS) as Module[]).map((m) => (
-              <button key={m} onClick={() => setModuleFilter(m)}
-                className={`text-xs font-medium px-3 py-1 rounded-lg transition-colors ${
-                  moduleFilter === m
-                    ? "bg-slate-800 text-white"
-                    : "bg-slate-100 text-slate-500 hover:bg-slate-200"
-                }`}>
-                {MODULE_LABELS[m]}
-              </button>
-            ))}
+        {/* flash */}
+        {flash && (
+          <div className={`mx-6 mt-3 px-4 py-2 rounded-lg text-sm animate-fade-in ${flash.ok ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+            {flash.msg}
           </div>
-        </div>
+        )}
 
-        <div className="overflow-x-auto">
+        {/* table */}
+        <div className="flex-1 overflow-auto">
           <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs font-semibold uppercase tracking-wider text-slate-400 bg-slate-50">
-                <th className="px-6 py-3">Time</th>
-                <th className="px-6 py-3">Event</th>
-                <th className="px-6 py-3">Details</th>
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
+                <th className="px-4 py-3">Code</th>
+                <th className="px-4 py-3">Name</th>
+                <th className="px-4 py-3">Category</th>
+                <th className="px-4 py-3">Supplier</th>
+                <th className="px-4 py-3">UoM</th>
+                <th className="px-4 py-3 text-right">Cost</th>
+                <th className="px-4 py-3 text-right">Sale</th>
+                <th className="px-4 py-3">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={3} className="px-6 py-10 text-center">
-                    <p className="text-slate-500 font-medium">
-                      {txns.length === 0
-                        ? "No activity recorded yet"
-                        : `No ${MODULE_LABELS[moduleFilter].toLowerCase()} activity`}
-                    </p>
-                    {txns.length === 0 && (
-                      <p className="text-slate-400 text-xs mt-1">
-                        Start by{" "}
-                        <Link href="/loads" className="text-blue-500 hover:underline">creating a booking</Link>
-                        {" "}or{" "}
-                        <Link href="/goods-in" className="text-blue-500 hover:underline">logging goods-in</Link>
-                      </p>
-                    )}
+            <tbody className="divide-y divide-slate-100 bg-white">
+              {visible.length === 0 && (
+                <tr><td colSpan={8} className="px-4 py-12 text-center text-slate-400">
+                  {skus.length === 0 ? 'No SKUs yet — click "+ New SKU" to start' : "No matches"}
+                </td></tr>
+              )}
+              {visible.map((s) => (
+                <tr key={s.id} onClick={() => openEdit(s)}
+                  className={`cursor-pointer transition-colors hover:bg-blue-50 ${selected?.id === s.id ? "bg-blue-50 border-l-2 border-l-blue-500" : ""}`}>
+                  <td className="px-4 py-3 font-mono font-semibold text-slate-800 text-xs">{s.code}</td>
+                  <td className="px-4 py-3 font-medium text-slate-700 max-w-[200px] truncate">{s.name}</td>
+                  <td className="px-4 py-3 text-slate-500">{s.category || "—"}</td>
+                  <td className="px-4 py-3 text-slate-500 max-w-[120px] truncate">{supplierName(s.supplierId)}</td>
+                  <td className="px-4 py-3 text-slate-500">{s.unitOfMeasure}</td>
+                  <td className="px-4 py-3 text-right text-slate-600 font-mono">{s.costPrice != null ? `£${s.costPrice.toFixed(2)}` : "—"}</td>
+                  <td className="px-4 py-3 text-right text-slate-600 font-mono">{s.salePrice != null ? `£${s.salePrice.toFixed(2)}` : "—"}</td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium capitalize ${STATUS_BADGE[s.status]}`}>{s.status}</span>
                   </td>
                 </tr>
-              ) : (
-                filtered.map((t) => (
-                  <tr key={t.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-3 text-slate-400 font-mono text-xs whitespace-nowrap">
-                      {new Date(t.timestamp).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" })}
-                    </td>
-                    <td className="px-6 py-3">
-                      <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${eventColor(t.event)}`}>
-                        {t.event}
-                      </span>
-                    </td>
-                    <td className="px-6 py-3 text-slate-500 font-mono text-xs">
-                      {Object.entries(t.details).slice(0, 3).map(([k, v]) => `${k}: ${v}`).join(" · ")}
-                    </td>
-                  </tr>
-                ))
-              )}
+              ))}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* ── edit panel ── */}
+      {panelOpen && (
+        <div className="w-[460px] shrink-0 border-l border-slate-200 bg-white flex flex-col overflow-hidden animate-slide-down">
+          {/* panel header */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+            <div>
+              <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">{isNew ? "New SKU" : "Edit SKU"}</p>
+              <p className="font-bold text-slate-800 text-sm mt-0.5">{isNew ? "—" : `${form.code} · ${form.name}`}</p>
+            </div>
+            <button onClick={closePanel} className="text-slate-400 hover:text-slate-600 p-1 rounded transition-colors">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          {/* form body */}
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
+
+            {/* Identity */}
+            <Section title="Identity">
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="SKU Code *"><Input value={form.code} onChange={e => f("code", e.target.value.toUpperCase())} placeholder="e.g. ELEC-TV-001" /></Field>
+                <Field label="Status"><Select value={form.status} onChange={e => f("status", e.target.value as SKU["status"])}>{STATUS_OPTS.map(s => <option key={s}>{s}</option>)}</Select></Field>
+              </div>
+              <Field label="Name *"><Input value={form.name} onChange={e => f("name", e.target.value)} placeholder="Product name" /></Field>
+              <Field label="Description"><textarea value={form.description} onChange={e => f("description", e.target.value)} rows={2} placeholder="Brief description…" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" /></Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Category"><Select value={form.category} onChange={e => f("category", e.target.value)}><option value="">— select —</option>{CATEGORIES.map(c => <option key={c}>{c}</option>)}</Select></Field>
+                <Field label="Subcategory"><Input value={form.subcategory} onChange={e => f("subcategory", e.target.value)} placeholder="Optional" /></Field>
+              </div>
+            </Section>
+
+            {/* Sourcing */}
+            <Section title="Sourcing">
+              <Field label="Supplier">
+                <Select value={form.supplierId} onChange={e => f("supplierId", e.target.value)}>
+                  <option value="">— none —</option>
+                  {suppliers.filter(s => s.status === "active").map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </Select>
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Supplier Code"><Input value={form.supplierCode} onChange={e => f("supplierCode", e.target.value)} placeholder="Their ref" /></Field>
+                <Field label="Lead Time (days)"><Input type="number" min={0} value={form.leadTimeDays ?? ""} onChange={e => f("leadTimeDays", num(e.target.value))} placeholder="0" /></Field>
+              </div>
+            </Section>
+
+            {/* Pricing */}
+            <Section title="Pricing & Unit">
+              <div className="grid grid-cols-3 gap-3">
+                <Field label="Unit of Measure"><Select value={form.unitOfMeasure} onChange={e => f("unitOfMeasure", e.target.value)}>{UOM_OPTIONS.map(u => <option key={u}>{u}</option>)}</Select></Field>
+                <Field label="Cost Price (£)"><Input type="number" step="0.01" min={0} value={form.costPrice ?? ""} onChange={e => f("costPrice", num(e.target.value))} placeholder="0.00" /></Field>
+                <Field label="Sale Price (£)"><Input type="number" step="0.01" min={0} value={form.salePrice ?? ""} onChange={e => f("salePrice", num(e.target.value))} placeholder="0.00" /></Field>
+              </div>
+            </Section>
+
+            {/* Physical */}
+            <Section title="Physical">
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Weight (kg)"><Input type="number" step="0.001" min={0} value={form.weight ?? ""} onChange={e => f("weight", num(e.target.value))} placeholder="0.000" /></Field>
+                <Field label="Dimensions"><Input value={form.dimensions} onChange={e => f("dimensions", e.target.value)} placeholder="L×W×H cm" /></Field>
+              </div>
+              <Field label="Barcode / EAN"><Input value={form.barcode} onChange={e => f("barcode", e.target.value)} placeholder="Scan or enter" /></Field>
+            </Section>
+
+            {/* Inventory */}
+            <Section title="Inventory Rules">
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Min Stock Level"><Input type="number" min={0} value={form.minStockLevel ?? ""} onChange={e => f("minStockLevel", num(e.target.value))} placeholder="0" /></Field>
+                <Field label="Reorder Point"><Input type="number" min={0} value={form.reorderPoint ?? ""} onChange={e => f("reorderPoint", num(e.target.value))} placeholder="0" /></Field>
+              </div>
+            </Section>
+
+            {/* Notes */}
+            <Section title="Notes">
+              <textarea value={form.notes} onChange={e => f("notes", e.target.value)} rows={3} placeholder="Any additional notes…" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+            </Section>
+          </div>
+
+          {/* panel footer */}
+          <div className="shrink-0 border-t border-slate-100 px-5 py-4 flex items-center gap-3">
+            <button onClick={save} disabled={saving}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold text-sm py-2.5 rounded-lg transition-colors">
+              {saving ? "Saving…" : isNew ? "Create SKU" : "Save changes"}
+            </button>
+            {!isNew && (
+              <button onClick={deleteSKU} className="text-red-500 hover:text-red-700 hover:bg-red-50 text-sm font-medium px-4 py-2.5 rounded-lg transition-colors border border-red-200">
+                Delete
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 pb-1.5 border-b border-slate-100">{title}</p>
+      <div className="space-y-3">{children}</div>
     </div>
   );
 }

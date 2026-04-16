@@ -1,95 +1,92 @@
-// Type definitions only — runtime data is stored in Upstash Redis via lib/db.ts
+// Core type definitions — SKU-centric system
 
-export interface InventoryItem {
-  sku: string;
-  quantity: number;
-  lastUpdated: string;
-}
-
-export interface PalletRecord {
-  palletId: string;
-  location: string;
-  sku: string;
-  lastMoved: string;
-}
-
-export interface Transaction {
-  id: number;
-  timestamp: string;
-  event: string;
-  details: Record<string, unknown>;
-}
-
-export interface TransferRequest {
-  id: number;
-  sku: string;
-  quantity: number;
-  from: string;
-  to: string;
-  status: "pending" | "in_transit" | "completed" | "cancelled";
+export interface SKU {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  category: string;
+  subcategory: string;
+  supplierId: string;
+  supplierCode: string;
+  unitOfMeasure: string;
+  costPrice: number | null;
+  salePrice: number | null;
+  weight: number | null;       // kg
+  dimensions: string;          // e.g. "40×30×20 cm"
+  barcode: string;
+  minStockLevel: number | null;
+  reorderPoint: number | null;
+  leadTimeDays: number | null;
+  status: "active" | "inactive" | "discontinued";
+  notes: string;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface Discrepancy {
-  id: number;
-  sku: string;
-  expectedQty: number;
-  actualQty: number;
-  location: string;
-  status: "open" | "investigating" | "resolved";
+export interface Supplier {
+  id: string;
+  name: string;
+  contactName: string;
+  email: string;
+  phone: string;
+  address: string;
+  country: string;
+  leadTimeDays: number;
+  paymentTerms: string;
+  currency: string;
+  status: "active" | "inactive";
   notes: string;
   createdAt: string;
-  resolvedAt?: string;
+  updatedAt: string;
 }
 
-export interface GoodsInDoc {
-  docId: string;
-  sku: string;
+export interface StockEntry {
+  id: string;
+  skuId: string;
+  location: string;
   quantity: number;
-  supplier: string;
-  receivedAt: string;
-  palletId: string;
+  reservedQty: number;
+  lastCountDate: string;
+  updatedAt: string;
 }
 
-export type LoadStatus =
-  | "booked"
-  | "collected"
-  | "in_transit"
-  | "out_for_delivery"
-  | "delivered"
-  | "pod_received"
-  | "failed"
-  | "rebooked"
-  | "cancelled";
-
-export type PodStatus = "pending" | "chased" | "received";
-export type LoadSource = "email" | "whatsapp" | "phone" | "manual";
-
-export interface EtaUpdate {
-  timestamp: string;
-  eta: string;
-  note: string;
+export interface ProjectItem {
+  skuId: string;
+  qtyRequired: number;
+  qtyAllocated: number;
 }
 
-export interface Load {
-  id: number;
-  reference: string;
-  source: LoadSource;
-  customer: string;
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  status: "planning" | "active" | "on_hold" | "completed" | "cancelled";
+  startDate: string | null;
+  endDate: string | null;
+  items: ProjectItem[];
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TransportItem {
+  skuId: string;
+  qty: number;
+}
+
+export interface TransportJob {
+  id: string;
+  ref: string;
+  items: TransportItem[];
   origin: string;
   destination: string;
-  collectionDate: string;
-  eta: string;
-  status: LoadStatus;
-  subcontractor: string;
-  subcontractorRef: string;
-  subcontractorReconciled: boolean;
-  podStatus: PodStatus;
-  podReceivedAt?: string;
-  etaUpdates: EtaUpdate[];
+  carrier: string;
+  trackingRef: string;
+  status: "pending" | "in_transit" | "delivered" | "cancelled";
+  scheduledDate: string | null;
+  deliveredDate: string | null;
   notes: string;
-  rebookedFromId?: number;
   createdAt: string;
   updatedAt: string;
 }
