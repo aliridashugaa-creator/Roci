@@ -173,7 +173,7 @@ export default function TopNav({ openPanel, onTogglePanel, jobCount, notificatio
         )}
       </div>
 
-      <div className="text-xs text-slate-600 shrink-0 ml-3 hidden sm:block">v0.2.0</div>
+      <div className="text-xs text-slate-600 shrink-0 ml-3 hidden sm:block">v0.1.6</div>
     </header>
   );
 }
