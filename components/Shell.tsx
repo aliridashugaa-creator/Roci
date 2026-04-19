@@ -11,12 +11,13 @@ const MapView = dynamic(() => import("@/app/transport/MapView"), {
 });
 
 // Lazy-load panels
-const CataloguePanel  = dynamic(() => import("./panels/CataloguePanel"),  { ssr: false });
-const SuppliersPanel  = dynamic(() => import("./panels/SuppliersPanel"),  { ssr: false });
-const WorkspacePanel  = dynamic(() => import("./panels/WorkspacePanel"),  { ssr: false });
-const ShipmentsPanel  = dynamic(() => import("./panels/ShipmentsPanel"),  { ssr: false });
-const AnalyticsPanel  = dynamic(() => import("./panels/AnalyticsPanel"),  { ssr: false });
-const SKUEditPanel    = dynamic(() => import("./panels/SKUEditPanel"),    { ssr: false });
+const CataloguePanel      = dynamic(() => import("./panels/CataloguePanel"),      { ssr: false });
+const SuppliersPanel      = dynamic(() => import("./panels/SuppliersPanel"),      { ssr: false });
+const WorkspacePanel      = dynamic(() => import("./panels/WorkspacePanel"),      { ssr: false });
+const ShipmentsPanel      = dynamic(() => import("./panels/ShipmentsPanel"),      { ssr: false });
+const AnalyticsPanel      = dynamic(() => import("./panels/AnalyticsPanel"),      { ssr: false });
+const SKUEditPanel        = dynamic(() => import("./panels/SKUEditPanel"),        { ssr: false });
+const SupplierEditPanel   = dynamic(() => import("./panels/SupplierEditPanel"),   { ssr: false });
 
 export type NavPanel = "catalogue" | "suppliers" | "workspace" | "shipments" | "analytics";
 
@@ -64,6 +65,10 @@ export default function Shell() {
   // ── right panel: SKU edit ────────────────────────────────────────────────────
   const [selectedSKU, setSelectedSKU] = useState<SKU | null>(null);
   const [isNewSKU,    setIsNewSKU]    = useState(false);
+
+  // ── right panel: supplier edit ───────────────────────────────────────────────
+  const [selectedSupplier, setSelectedSupplier] = useState<import("@/lib/store").Supplier | null>(null);
+  const [isNewSupplier,    setIsNewSupplier]    = useState(false);
 
   // ── flash ────────────────────────────────────────────────────────────────────
   const [flash, setFlash] = useState<{ msg: string; ok: boolean } | null>(null);
@@ -155,19 +160,25 @@ export default function Shell() {
   }, 0);
 
   // ── SKU edit helpers ─────────────────────────────────────────────────────────
-  const openNewSKU = () => { setIsNewSKU(true); setSelectedSKU(null); closeJob(); };
-  const openEditSKU = (sku: SKU) => { setIsNewSKU(false); setSelectedSKU(sku); closeJob(); };
+  const openNewSKU = () => { setIsNewSKU(true); setSelectedSKU(null); closeJob(); closeSupplier(); };
+  const openEditSKU = (sku: SKU) => { setIsNewSKU(false); setSelectedSKU(sku); closeJob(); closeSupplier(); };
   const closeSKU = () => { setSelectedSKU(null); setIsNewSKU(false); };
+
+  // ── supplier edit helpers ────────────────────────────────────────────────────
+  const openNewSupplier  = () => { setIsNewSupplier(true);  setSelectedSupplier(null); closeSKU(); closeJob(); };
+  const openEditSupplier = (s: import("@/lib/store").Supplier) => { setIsNewSupplier(false); setSelectedSupplier(s); closeSKU(); closeJob(); };
+  const closeSupplier    = () => { setSelectedSupplier(null); setIsNewSupplier(false); };
 
   // ── panel helpers ────────────────────────────────────────────────────────────
   const togglePanel = (p: NavPanel) => {
     setOpenPanel(prev => prev === p ? null : p);
-    closeSKU(); closeJob();
+    closeSKU(); closeJob(); closeSupplier();
   };
 
-  const jobPanelOpen = selectedJob !== null || isNewJob;
-  const skuPanelOpen = selectedSKU !== null || isNewSKU;
-  const rightPanelOpen = jobPanelOpen || skuPanelOpen;
+  const jobPanelOpen      = selectedJob !== null || isNewJob;
+  const skuPanelOpen      = selectedSKU !== null || isNewSKU;
+  const supplierPanelOpen = selectedSupplier !== null || isNewSupplier;
+  const rightPanelOpen    = jobPanelOpen || skuPanelOpen || supplierPanelOpen;
 
   // Wider panel for catalogue / suppliers to accommodate their own two-col layout if needed
   const panelWidth = (openPanel === "catalogue" || openPanel === "suppliers") ? "w-[560px]" : "w-[480px]";
@@ -206,7 +217,14 @@ export default function Shell() {
               stock={stock}
             />
           )}
-          {openPanel === "suppliers"  && <SuppliersPanel  onClose={() => setOpenPanel(null)} />}
+          {openPanel === "suppliers"  && (
+            <SuppliersPanel
+              onClose={() => setOpenPanel(null)}
+              onSelectSupplier={openEditSupplier}
+              onNewSupplier={openNewSupplier}
+              selectedSupplierId={selectedSupplier?.id ?? null}
+            />
+          )}
           {openPanel === "workspace"  && (
             <WorkspacePanel
               onClose={() => setOpenPanel(null)}
@@ -336,6 +354,17 @@ export default function Shell() {
             onClose={closeSKU}
             onSaved={() => { reload(); }}
             onDeleted={() => { closeSKU(); reload(); }}
+          />
+        )}
+
+        {/* ── right panel: supplier edit ── */}
+        {supplierPanelOpen && (
+          <SupplierEditPanel
+            supplier={selectedSupplier}
+            isNew={isNewSupplier}
+            onClose={closeSupplier}
+            onSaved={closeSupplier}
+            onDeleted={closeSupplier}
           />
         )}
       </div>
