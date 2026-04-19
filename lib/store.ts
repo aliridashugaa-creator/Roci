@@ -98,6 +98,7 @@ export interface TransportItem {
 export interface TransportJob {
   id: string;
   ref: string;
+  projectId?: string;
   items: TransportItem[];
   origin: string;
   destination: string;

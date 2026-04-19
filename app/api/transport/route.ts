@@ -19,6 +19,7 @@ export async function POST(req: Request) {
   const job: TransportJob = {
     id: `trn_${Date.now()}`,
     ref: body.ref ?? autoRef,
+    ...(body.projectId ? { projectId: body.projectId } : {}),
     items: body.items ?? [],
     origin: body.origin.trim(),
     destination: body.destination.trim(),
