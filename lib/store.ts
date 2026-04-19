@@ -24,14 +24,29 @@ export interface SKU {
   updatedAt: string;
 }
 
+export type LocationType = "hq" | "depot" | "warehouse" | "store" | "port" | "other";
+
+export interface SupplierLocation {
+  id: string;
+  type: LocationType;
+  label: string;      // e.g. "London Warehouse"
+  address: string;
+  city: string;
+  country: string;
+  postcode: string;
+  phone: string;
+  isPrimary: boolean;
+}
+
 export interface Supplier {
   id: string;
   name: string;
   contactName: string;
   email: string;
   phone: string;
-  address: string;
+  address: string;    // kept for legacy / primary address
   country: string;
+  locations: SupplierLocation[];
   leadTimeDays: number;
   paymentTerms: string;
   currency: string;
@@ -62,6 +77,11 @@ export interface Project {
   name: string;
   description: string;
   status: "planning" | "active" | "on_hold" | "completed" | "cancelled";
+  clientName: string;
+  supplierId: string;
+  warehouseLocation: string;
+  targetAddress: string;
+  paymentTerms: string;
   startDate: string | null;
   endDate: string | null;
   items: ProjectItem[];
@@ -89,4 +109,16 @@ export interface TransportJob {
   notes: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// Notification type for the UI
+export interface AppNotification {
+  id: string;
+  type: "low_stock" | "out_of_stock" | "reorder";
+  skuId: string;
+  skuCode: string;
+  skuName: string;
+  currentQty: number;
+  threshold: number;
+  locationLabel: string;
 }

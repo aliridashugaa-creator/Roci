@@ -5,7 +5,7 @@ import type { Supplier, SKU, TransportJob } from "@/lib/store";
 
 const BLANK: Omit<Supplier, "id" | "createdAt" | "updatedAt"> = {
   name: "", contactName: "", email: "", phone: "", address: "", country: "",
-  leadTimeDays: 0, paymentTerms: "", currency: "GBP", status: "active", notes: "",
+  locations: [], leadTimeDays: 0, paymentTerms: "", currency: "GBP", status: "active", notes: "",
 };
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -55,8 +55,9 @@ export default function SuppliersPage() {
   const openEdit = (s: Supplier) => {
     setIsNew(false); setSelected(s);
     setForm({ name: s.name, contactName: s.contactName, email: s.email, phone: s.phone,
-      address: s.address, country: s.country, leadTimeDays: s.leadTimeDays,
-      paymentTerms: s.paymentTerms, currency: s.currency, status: s.status, notes: s.notes });
+      address: s.address, country: s.country, locations: s.locations ?? [],
+      leadTimeDays: s.leadTimeDays, paymentTerms: s.paymentTerms,
+      currency: s.currency, status: s.status, notes: s.notes });
   };
 
   const save = async () => {

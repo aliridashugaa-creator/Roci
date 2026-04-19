@@ -20,6 +20,7 @@ export async function POST(req: Request) {
     phone: body.phone ?? "",
     address: body.address ?? "",
     country: body.country ?? "",
+    locations: body.locations ?? [],
     leadTimeDays: body.leadTimeDays ?? 0,
     paymentTerms: body.paymentTerms ?? "",
     currency: body.currency ?? "GBP",
