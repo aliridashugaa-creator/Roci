@@ -196,41 +196,35 @@ export default function Shell() {
         </div>
 
         {/* ── left nav panels ── */}
-        {openPanel !== "suppliers" && (
-          <div className={`absolute left-0 top-0 bottom-0 ${panelWidth} bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out ${openPanel ? "translate-x-0" : "-translate-x-full"} z-20`}>
-            {openPanel === "catalogue"  && (
-              <CataloguePanel
-                onClose={() => setOpenPanel(null)}
-                onSelectSKU={openEditSKU}
-                onNewSKU={openNewSKU}
-                selectedSKUId={selectedSKU?.id ?? null}
-                stock={stock}
-              />
-            )}
-            {openPanel === "workspace"  && (
-              <WorkspacePanel
-                onClose={() => setOpenPanel(null)}
-                onSelectJob={j => { openEditJob(j); }}
-                onNewJob={openNewJob}
-              />
-            )}
-            {openPanel === "shipments"  && (
-              <ShipmentsPanel
-                jobs={jobs}
-                skus={skus}
-                selectedJobId={selectedJob?.id ?? null}
-                onSelectJob={openEditJob}
-                onNewJob={openNewJob}
-                onClose={() => setOpenPanel(null)}
-              />
-            )}
-            {openPanel === "analytics"  && <AnalyticsPanel  onClose={() => setOpenPanel(null)} />}
-          </div>
-        )}
-
-        {/* ── right nav panel: suppliers ── */}
-        <div className={`absolute right-0 top-0 bottom-0 w-[560px] bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out ${openPanel === "suppliers" ? "translate-x-0" : "translate-x-full"} z-20`}>
-          {openPanel === "suppliers" && <SuppliersPanel onClose={() => setOpenPanel(null)} />}
+        <div className={`absolute left-0 top-0 bottom-0 ${panelWidth} bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out ${openPanel ? "translate-x-0" : "-translate-x-full"} z-20`}>
+          {openPanel === "catalogue"  && (
+            <CataloguePanel
+              onClose={() => setOpenPanel(null)}
+              onSelectSKU={openEditSKU}
+              onNewSKU={openNewSKU}
+              selectedSKUId={selectedSKU?.id ?? null}
+              stock={stock}
+            />
+          )}
+          {openPanel === "suppliers"  && <SuppliersPanel  onClose={() => setOpenPanel(null)} />}
+          {openPanel === "workspace"  && (
+            <WorkspacePanel
+              onClose={() => setOpenPanel(null)}
+              onSelectJob={j => { openEditJob(j); }}
+              onNewJob={openNewJob}
+            />
+          )}
+          {openPanel === "shipments"  && (
+            <ShipmentsPanel
+              jobs={jobs}
+              skus={skus}
+              selectedJobId={selectedJob?.id ?? null}
+              onSelectJob={openEditJob}
+              onNewJob={openNewJob}
+              onClose={() => setOpenPanel(null)}
+            />
+          )}
+          {openPanel === "analytics"  && <AnalyticsPanel  onClose={() => setOpenPanel(null)} />}
         </div>
 
         {/* ── right panel: job edit ── */}
