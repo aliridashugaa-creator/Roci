@@ -46,7 +46,7 @@
   to   { opacity: 1; transform: translateY(0)   scale(1);    }
 }
 
-/* Slide from right for detail panels */
+/* Subtle slide from right (detail cards) */
 .animate-slide-right {
   animation: slideRight 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
@@ -54,6 +54,16 @@
 @keyframes slideRight {
   from { opacity: 0; transform: translateX(24px); }
   to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Full-panel slide in from right (drawer overlays) */
+.animate-panel-right {
+  animation: panelRight 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes panelRight {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
 }
 
 /* Transport map marker pulse ring */
