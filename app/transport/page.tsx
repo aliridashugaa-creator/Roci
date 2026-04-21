@@ -211,6 +211,7 @@ export default function TransportPage() {
           jobs={visibleJobs}
           skus={skus}
           selectedId={selected?.id ?? null}
+          showRoutes={true}
           onSelect={id => { const j = jobs.find(x => x.id === id); if (j) openEdit(j); }}
         />
 
