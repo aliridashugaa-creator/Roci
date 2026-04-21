@@ -8,18 +8,14 @@ interface NavItem {
   id: NavPanel;
   label: string;
   icon: string;
-  title: string;
-  description: string;
-  newLabel?: string;
 }
 
-// Workspace first, Catalogue last
 const NAV_ITEMS: NavItem[] = [
-  { id: "workspace",  label: "Workspace",  icon: "⬡",  title: "Operations & Inventory", description: "Projects, stock & in-progress transits",       newLabel: "+ Project"  },
-  { id: "suppliers",  label: "Suppliers",  icon: "🏢", title: "Supplier Directory",     description: "Manage relationships, lead times & currencies", newLabel: "+ Supplier" },
-  { id: "shipments",  label: "Shipments",  icon: "🚛", title: "Shipments & Jobs",        description: "Live transport jobs and tracking",              newLabel: "+ Job"      },
-  { id: "analytics",  label: "Analytics",  icon: "📊", title: "KPIs & Insights",         description: "Performance metrics across all modules"                              },
-  { id: "catalogue",  label: "Catalogue",  icon: "⊞",  title: "SKU Catalogue",          description: "Products, pricing & units of measure",          newLabel: "+ SKU"      },
+  { id: "workspace", label: "Workspace", icon: "⬡"  },
+  { id: "suppliers", label: "Suppliers", icon: "🏢" },
+  { id: "shipments", label: "Shipments", icon: "🚛" },
+  { id: "analytics", label: "Analytics", icon: "📊" },
+  { id: "catalogue", label: "Catalogue", icon: "⊞"  },
 ];
 
 interface Props {
@@ -30,7 +26,6 @@ interface Props {
 }
 
 export default function TopNav({ openPanel, onTogglePanel, jobCount, notifications }: Props) {
-  const [hovered,    setHovered]    = useState<NavPanel | null>(null);
   const [showNotifs, setShowNotifs] = useState(false);
 
   const criticalCount = notifications.filter(n => n.type === "out_of_stock").length;
@@ -57,63 +52,20 @@ export default function TopNav({ openPanel, onTogglePanel, jobCount, notificatio
       {/* Nav items */}
       <nav className="flex items-center gap-0.5 flex-1">
         {NAV_ITEMS.map(item => {
-          const isOpen    = openPanel === item.id;
-          const isHovered = hovered === item.id;
+          const isOpen = openPanel === item.id;
           return (
-            <div
+            <button
               key={item.id}
-              className="relative"
-              onMouseEnter={() => setHovered(item.id)}
-              onMouseLeave={() => setHovered(null)}
+              onClick={() => onTogglePanel(item.id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
+                isOpen
+                  ? "bg-blue-600 text-white"
+                  : "text-slate-400 hover:text-white hover:bg-slate-800"
+              }`}
             >
-              <button
-                onClick={() => onTogglePanel(item.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
-                  isOpen
-                    ? "bg-blue-600 text-white"
-                    : "text-slate-400 hover:text-white hover:bg-slate-800"
-                }`}
-              >
-                <span className="text-base leading-none">{item.icon}</span>
-                <span className="hidden md:block">{item.label}</span>
-                <svg
-                  className={`w-3 h-3 ml-0.5 hidden md:block transition-transform duration-150 ${isHovered ? "rotate-180" : ""}`}
-                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-
-              {/* Dropdown */}
-              {isHovered && (
-                <div className="absolute top-full left-0 mt-1.5 w-56 bg-white rounded-xl shadow-2xl border border-slate-100 z-[100] animate-slide-down">
-                  <div className="absolute -top-1.5 left-4 w-3 h-3 bg-white border-l border-t border-slate-100 rotate-45" />
-                  <div className="p-3">
-                    <p className="text-xs font-bold text-slate-800 mb-0.5">{item.title}</p>
-                    <p className="text-xs text-slate-400 leading-relaxed mb-3">{item.description}</p>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => { onTogglePanel(item.id); setHovered(null); }}
-                        className={`flex-1 text-xs font-semibold py-1.5 px-2 rounded-lg transition-colors ${
-                          isOpen
-                            ? "bg-blue-50 text-blue-600 hover:bg-blue-100"
-                            : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                        }`}
-                      >
-                        {isOpen ? "Close" : "Open"}
-                      </button>
-                      {item.newLabel && (
-                        <button
-                          onClick={() => { onTogglePanel(item.id); setHovered(null); }}
-                          className="text-xs font-semibold py-1.5 px-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                        >
-                          {item.newLabel}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+              <span className="text-base leading-none">{item.icon}</span>
+              <span className="hidden md:block">{item.label}</span>
+            </button>
           );
         })}
       </nav>
