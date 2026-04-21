@@ -199,6 +199,7 @@ export default function Shell() {
             jobs={jobs}
             skus={skus}
             selectedId={selectedJob?.id ?? null}
+            showRoutes={openPanel === "shipments"}
             onSelect={id => {
               const j = jobs.find(x => x.id === id);
               if (j) { openEditJob(j); if (!openPanel) setOpenPanel("shipments"); }

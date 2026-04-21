@@ -2,9 +2,9 @@
 // In-memory caches survive re-renders within the same browser session
 
 const geocodeCache = new Map<string, [number, number] | null>();
-const routeCache = new Map<string, [number, number][]>();
+const routeCache   = new Map<string, [number, number][]>();
 
-/** Major UK cities → [lat, lon] */
+/** Major UK cities — used only as a FALLBACK if Nominatim fails */
 const UK_CITIES: Record<string, [number, number]> = {
   "london": [51.5074, -0.1278],
   "city of london": [51.5155, -0.0922],
@@ -74,8 +74,6 @@ const UK_CITIES: Record<string, [number, number]> = {
   "barnsley": [53.5526, -1.4797],
   "grimsby": [53.5675, -0.0798],
   "lincoln": [53.2307, -0.5406],
-  "grantham": [52.9142, -0.6457],
-  "newark": [53.0762, -0.8130],
   "loughborough": [52.7722, -1.2046],
   "burton upon trent": [52.8019, -1.6367],
   "tamworth": [52.6341, -1.6956],
@@ -90,47 +88,25 @@ const UK_CITIES: Record<string, [number, number]> = {
   "woking": [51.3168, -0.5600],
   "crawley": [51.1093, -0.1872],
   "eastbourne": [50.7688, 0.2840],
-  "hastings": [50.8543, 0.5731],
-  "folkestone": [51.0816, 1.1693],
   "dover": [51.1295, 1.3089],
   "maidstone": [51.2720, 0.5290],
-  "tunbridge wells": [51.1320, 0.2630],
-  "royal tunbridge wells": [51.1320, 0.2630],
   "colchester": [51.8960, 0.8919],
   "chelmsford": [51.7356, 0.4685],
-  "southend-on-sea": [51.5459, 0.7077],
-  "basildon": [51.5760, 0.4882],
-  "harlow": [51.7758, 0.1040],
-  "stevenage": [51.9025, -0.2007],
   "watford": [51.6565, -0.3959],
   "st albans": [51.7454, -0.3367],
-  "hemel hempstead": [51.7526, -0.4692],
-  "aylesbury": [51.8168, -0.8124],
   "slough": [51.5105, -0.5950],
   "windsor": [51.4836, -0.6044],
-  "maidenhead": [51.5227, -0.7177],
-  "wokingham": [51.4114, -0.8352],
   "basingstoke": [51.2665, -1.0874],
   "winchester": [51.0632, -1.3081],
   "newport": [51.5879, -2.9977],
-  "newport (wales)": [51.5879, -2.9977],
   "wrexham": [53.0461, -2.9921],
-  "bangor": [53.2274, -4.1293],
-  "bangor (wales)": [53.2274, -4.1293],
-  "caernarfon": [53.1390, -4.2762],
-  "aberystwyth": [52.4153, -4.0829],
-  "llandudno": [53.3240, -3.8264],
-  "rhyl": [53.3197, -3.4907],
   "stirling": [56.1165, -3.9369],
   "perth": [56.3950, -3.4291],
-  "st andrews": [56.3398, -2.7966],
   "falkirk": [56.0019, -3.7839],
   "dumfries": [55.0707, -3.6051],
   "ayr": [55.4628, -4.6292],
-  "kilmarnock": [55.6110, -4.4946],
   "paisley": [55.8452, -4.4234],
   "motherwell": [55.7946, -3.9923],
-  "hamilton": [55.7775, -4.0394],
   "livingston": [55.8845, -3.5153],
   "derry": [54.9966, -7.3086],
   "londonderry": [54.9966, -7.3086],
@@ -140,40 +116,45 @@ const UK_CITIES: Record<string, [number, number]> = {
   "heathrow": [51.4700, -0.4543],
   "gatwick": [51.1537, -0.1821],
   "stansted": [51.8850, 0.2350],
-  "luton airport": [51.8746, -0.3683],
   "birmingham airport": [52.4539, -1.7480],
   "manchester airport": [53.3650, -2.2726],
 };
 
 /**
  * Geocode a place name to [lat, lon].
- * First checks the built-in UK cities dictionary, then falls back to Nominatim.
+ * Nominatim is tried first (no country restriction → supports international addresses
+ * and resolves street-level addresses precisely). The hardcoded city dict is a
+ * fast-path fallback for when Nominatim is unreachable or returns nothing.
  */
 export async function geocodePlace(place: string): Promise<[number, number] | null> {
   const key = place.toLowerCase().trim();
   if (geocodeCache.has(key)) return geocodeCache.get(key) ?? null;
 
+  // ── 1. Try Nominatim (accurate for any address, worldwide) ─────────────────
+  try {
+    const url =
+      `https://nominatim.openstreetmap.org/search` +
+      `?q=${encodeURIComponent(place)}` +
+      `&format=jsonv2&limit=1&addressdetails=1`;
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Roci-Logistics/1.0 (logistics platform)" },
+    });
+    if (res.ok) {
+      const data = await res.json() as Array<{ lat: string; lon: string; importance: number }>;
+      if (data[0]) {
+        const coords: [number, number] = [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+        geocodeCache.set(key, coords);
+        return coords;
+      }
+    }
+  } catch { /* network error — fall through */ }
+
+  // ── 2. Fallback: hardcoded UK city centroids ────────────────────────────────
   const city = UK_CITIES[key];
   if (city) {
     geocodeCache.set(key, city);
     return city;
   }
-
-  try {
-    const url =
-      `https://nominatim.openstreetmap.org/search` +
-      `?q=${encodeURIComponent(place)},United+Kingdom` +
-      `&format=json&limit=1&countrycodes=gb`;
-    const res = await fetch(url, {
-      headers: { "User-Agent": "Roci-SKU-Platform/1.0" },
-    });
-    const data = await res.json() as Array<{ lat: string; lon: string }>;
-    if (data[0]) {
-      const coords: [number, number] = [parseFloat(data[0].lat), parseFloat(data[0].lon)];
-      geocodeCache.set(key, coords);
-      return coords;
-    }
-  } catch { /* ignore network errors */ }
 
   geocodeCache.set(key, null);
   return null;
@@ -182,28 +163,26 @@ export async function geocodePlace(place: string): Promise<[number, number] | nu
 /**
  * Fetch driving route coordinates from OSRM.
  * Falls back to a straight line if OSRM is unavailable.
- * Returns Leaflet [lat, lon] pairs.
+ * Returns [lat, lon] pairs.
  */
 export async function fetchRouteCoords(
   from: [number, number],
-  to: [number, number],
+  to:   [number, number],
 ): Promise<[number, number][]> {
   const key = `${from[0].toFixed(4)},${from[1].toFixed(4)};${to[0].toFixed(4)},${to[1].toFixed(4)}`;
   if (routeCache.has(key)) return routeCache.get(key)!;
 
   try {
-    // OSRM expects lon,lat (GeoJSON order)
     const url =
       `https://router.project-osrm.org/route/v1/driving/` +
       `${from[1].toFixed(5)},${from[0].toFixed(5)};` +
       `${to[1].toFixed(5)},${to[0].toFixed(5)}` +
       `?overview=full&geometries=geojson`;
-    const res = await fetch(url);
+    const res  = await fetch(url);
     const data = await res.json() as {
       routes?: [{ geometry: { coordinates: [number, number][] } }];
     };
     if (data.routes?.[0]?.geometry?.coordinates) {
-      // Convert [lon, lat] → [lat, lon] for Leaflet
       const coords: [number, number][] = data.routes[0].geometry.coordinates.map(
         ([lon, lat]) => [lat, lon],
       );

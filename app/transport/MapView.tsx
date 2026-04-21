@@ -110,11 +110,12 @@ interface Props {
   jobs: TransportJob[];
   skus: SKU[];
   selectedId: string | null;
+  showRoutes: boolean;
   onSelect: (id: string) => void;
 }
 
 // ── component ─────────────────────────────────────────────────────────────────
-export default function MapView({ jobs, skus, selectedId, onSelect }: Props) {
+export default function MapView({ jobs, skus, selectedId, showRoutes, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef       = useRef<maplibregl.Map | null>(null);
   const loadedRef    = useRef(false);
@@ -278,13 +279,28 @@ export default function MapView({ jobs, skus, selectedId, onSelect }: Props) {
     };
   }, [onSelect]);
 
+  // ── show / hide routes and markers when showRoutes changes ─────────────────
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loadedRef.current) return;
+    const visibility = showRoutes ? "visible" : "none";
+    ["routes-glow", "routes-base", "routes-flow", "routes-sel"].forEach(id => {
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", visibility);
+    });
+    Object.values(markersRef.current).forEach(m => {
+      m.orig.getElement().style.display = showRoutes ? "" : "none";
+      m.dest.getElement().style.display = showRoutes ? "" : "none";
+    });
+  }, [showRoutes]);
+
   // ── sync GeoJSON whenever routes / selection / skus change ─────────────────
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loadedRef.current) return;
+    const empty: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
     (map.getSource("routes") as maplibregl.GeoJSONSource | undefined)
-      ?.setData(buildFC(routes, skus, selectedId));
-  }, [routes, skus, selectedId]);
+      ?.setData(showRoutes ? buildFC(routes, skus, selectedId) : empty);
+  }, [routes, skus, selectedId, showRoutes]);
 
   // ── geocode + build routes when jobs list changes ───────────────────────────
   useEffect(() => {
