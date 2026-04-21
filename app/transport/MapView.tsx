@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import type { TransportJob, SKU } from "@/lib/store";
+import type { TransportJob, SKU, Supplier, Project, LocationType } from "@/lib/store";
 import { geocodePlace, fetchRouteCoords } from "@/lib/geocode";
 
 // ── constants ─────────────────────────────────────────────────────────────────
@@ -98,6 +98,71 @@ function makeTruckMarker(color: string, isOrigin: boolean): HTMLElement {
   return wrap;
 }
 
+// ── location pin colours ──────────────────────────────────────────────────────
+const LOC_COLORS: Record<LocationType | "warehouse_op" | "delivery", string> = {
+  hq:           "#3b82f6",
+  depot:        "#6366f1",
+  warehouse:    "#f59e0b",
+  warehouse_op: "#f59e0b",
+  store:        "#22c55e",
+  port:         "#06b6d4",
+  other:        "#94a3b8",
+  delivery:     "#22c55e",
+};
+
+const LOC_LABELS: Record<LocationType | "warehouse_op" | "delivery", string> = {
+  hq:           "HQ",
+  depot:        "Depot",
+  warehouse:    "Warehouse",
+  warehouse_op: "Warehouse",
+  store:        "Store",
+  port:         "Port",
+  other:        "Location",
+  delivery:     "Delivery",
+};
+
+/** Small square pin for a fixed location */
+function makeLocationPin(type: LocationType | "warehouse_op" | "delivery", title: string): HTMLElement {
+  const color = LOC_COLORS[type] ?? "#94a3b8";
+  const wrap  = document.createElement("div");
+  wrap.title  = title;
+  wrap.style.cssText = "cursor:pointer;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.25))";
+
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 28 36");
+  svg.setAttribute("width", "28");
+  svg.setAttribute("height", "36");
+
+  // Teardrop pin shape
+  svg.innerHTML = `
+    <path d="M14 2C8.477 2 4 6.477 4 12c0 7.5 10 22 10 22s10-14.5 10-22C24 6.477 19.523 2 14 2z"
+      fill="${color}" stroke="white" stroke-width="1.5"/>
+    <text x="14" y="16" text-anchor="middle" dominant-baseline="middle"
+      font-size="9" font-weight="700" fill="white" font-family="system-ui,sans-serif">
+      ${LOC_LABELS[type] === "Warehouse" || LOC_LABELS[type] === "warehouse_op" ? "WH" : LOC_LABELS[type].slice(0, 2).toUpperCase()}
+    </text>
+  `;
+
+  wrap.appendChild(svg);
+  return wrap;
+}
+
+/**
+ * Geocode with fallback: if the full string fails, try the segment after " — "
+ * or " - " (handles "Warehouse A — Manchester" → "Manchester").
+ */
+async function geocodeBestEffort(raw: string): Promise<[number, number] | null> {
+  const direct = await geocodePlace(raw);
+  if (direct) return direct;
+  // Try the part after a dash separator
+  const afterDash = raw.split(/\s[—–-]\s/).pop()?.trim();
+  if (afterDash && afterDash !== raw) return geocodePlace(afterDash);
+  // Try last comma-separated chunk
+  const lastPart = raw.split(",").pop()?.trim();
+  if (lastPart && lastPart !== raw) return geocodePlace(lastPart);
+  return null;
+}
+
 // ── types ─────────────────────────────────────────────────────────────────────
 interface RouteEntry {
   job: TransportJob;
@@ -122,6 +187,7 @@ export default function MapView({ jobs, skus, selectedId, showRoutes, onSelect }
   const frameRef     = useRef<number>(0);
   const dashRef      = useRef(0);
   const markersRef   = useRef<Record<string, { orig: maplibregl.Marker; dest: maplibregl.Marker }>>({});
+  const locPinsRef   = useRef<maplibregl.Marker[]>([]);
 
   const [routes,  setRoutes]  = useState<RouteEntry[]>([]);
   const [loading, setLoading] = useState(0);
@@ -274,6 +340,8 @@ export default function MapView({ jobs, skus, selectedId, showRoutes, onSelect }
       cancelAnimationFrame(frameRef.current);
       Object.values(markersRef.current).forEach(m => { m.orig.remove(); m.dest.remove(); });
       markersRef.current = {};
+      locPinsRef.current.forEach(m => m.remove());
+      locPinsRef.current = [];
       map.remove();
       mapRef.current = null;
     };
@@ -354,6 +422,61 @@ export default function MapView({ jobs, skus, selectedId, showRoutes, onSelect }
 
     return () => { alive = false; };
   }, [jobs, onSelect]);
+
+  // ── fetch + plot warehouse / location pins ───────────────────────────────────
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      const [suppliers, projects]: [Supplier[], Project[]] = await Promise.all([
+        fetch("/api/suppliers").then(r => r.json()),
+        fetch("/api/projects").then(r => r.json()),
+      ]);
+      if (!alive) return;
+
+      // Build a deduplicated list of { address, label, type }
+      type PinSpec = { address: string; label: string; type: LocationType | "warehouse_op" | "delivery" };
+      const pins: PinSpec[] = [];
+      const seen = new Set<string>();
+
+      const addPin = (address: string, label: string, type: PinSpec["type"]) => {
+        const key = address.toLowerCase().trim();
+        if (!address.trim() || seen.has(key)) return;
+        seen.add(key);
+        pins.push({ address, label, type });
+      };
+
+      // Supplier locations
+      for (const sup of suppliers) {
+        for (const loc of sup.locations ?? []) {
+          const addr = [loc.address, loc.city, loc.postcode, loc.country].filter(Boolean).join(", ");
+          addPin(addr, `${sup.name}\n${loc.label}`, loc.type);
+        }
+      }
+
+      // Project warehouses + delivery targets
+      for (const proj of projects) {
+        if (proj.warehouseLocation) addPin(proj.warehouseLocation, `${proj.name}\nWarehouse`, "warehouse_op");
+        if (proj.targetAddress)     addPin(proj.targetAddress,     `${proj.name}\nDelivery`,  "delivery");
+      }
+
+      // Geocode and place markers
+      for (const pin of pins) {
+        if (!alive) return;
+        const coords = await geocodeBestEffort(pin.address);
+        if (!alive || !coords) continue;
+        const map = mapRef.current;
+        if (!map) continue;
+        const el = makeLocationPin(pin.type, pin.label);
+        const marker = new maplibregl.Marker({ element: el, anchor: "bottom" })
+          .setLngLat([coords[1], coords[0]])
+          .addTo(map);
+        locPinsRef.current.push(marker);
+      }
+    })();
+
+    return () => { alive = false; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── fly to selected route (called from sidebar click OR marker click) ───────
   useEffect(() => {
